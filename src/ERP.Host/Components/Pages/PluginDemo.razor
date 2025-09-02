@@ -1,0 +1,133 @@
+@page "/plugin-demo"
+@using ERP.SharedKernel.Events
+@using ERP.SharedKernel.Contracts
+@using ERP.Host.Services
+@inject PluginManager PluginManager
+@inject IEventPublisher EventPublisher
+@inject ILogger<PluginDemo> Logger
+
+<PageTitle>Plugin Demo</PageTitle>
+
+<h1>Plugin System Demo</h1>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>Loaded Plugins</h5>
+            </div>
+            <div class="card-body">
+                @if (PluginManager.LoadedPlugins.Any())
+                {
+                    <ul class="list-group">
+                        @foreach (var plugin in PluginManager.LoadedPlugins)
+                        {
+                            <li class="list-group-item">
+                                <strong>@plugin.DisplayName</strong> (@plugin.ModuleId)
+                                <br />
+                                <small class="text-muted">Version: @plugin.Version</small>
+                            </li>
+                        }
+                    </ul>
+                }
+                else
+                {
+                    <p class="text-muted">No plugins loaded.</p>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>Event Publishing Demo</h5>
+            </div>
+            <div class="card-body">
+                <button class="btn btn-primary mb-2" @onclick="PublishInvoiceCreatedEvent">
+                    Publish Invoice Created Event
+                </button>
+                <br />
+                <button class="btn btn-success mb-2" @onclick="PublishPaymentReceivedEvent">
+                    Publish Payment Received Event
+                </button>
+                
+                @if (!string.IsNullOrEmpty(lastEventMessage))
+                {
+                    <div class="alert alert-info mt-2">
+                        @lastEventMessage
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5>Navigation Providers</h5>
+            </div>
+            <div class="card-body">
+                @foreach (var navProvider in PluginManager.GetPlugins<INavigationProvider>())
+                {
+                    <h6>@navProvider.GetType().Name</h6>
+                    <ul>
+                        @foreach (var navItem in navProvider.GetNavigationItems())
+                        {
+                            <li>
+                                <strong>@navItem.Text</strong> - <code>@navItem.Href</code>
+                                @if (navItem.Children.Any())
+                                {
+                                    <ul>
+                                        @foreach (var child in navItem.Children)
+                                        {
+                                            <li>@child.Text - <code>@child.Href</code></li>
+                                        }
+                                    </ul>
+                                }
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string lastEventMessage = string.Empty;
+
+    private async Task PublishInvoiceCreatedEvent()
+    {
+        var invoiceEvent = new InvoiceCreatedEvent(
+            invoiceId: Guid.NewGuid(),
+            invoiceNumber: $"INV-{DateTime.Now:yyyyMMdd}-001",
+            amount: 1250.00m,
+            customerId: "CUST-001",
+            dueDate: DateTime.Today.AddDays(30)
+        );
+
+        await EventPublisher.PublishAsync(invoiceEvent);
+        lastEventMessage = $"Published InvoiceCreatedEvent: {invoiceEvent.InvoiceNumber} for ${invoiceEvent.Amount}";
+        Logger.LogInformation("Published invoice created event: {InvoiceNumber}", invoiceEvent.InvoiceNumber);
+        StateHasChanged();
+    }
+
+    private async Task PublishPaymentReceivedEvent()
+    {
+        var paymentEvent = new PaymentReceivedEvent(
+            paymentId: Guid.NewGuid(),
+            invoiceId: Guid.NewGuid(),
+            amount: 750.00m,
+            paymentDate: DateTime.Now,
+            paymentMethod: "Credit Card"
+        );
+
+        await EventPublisher.PublishAsync(paymentEvent);
+        lastEventMessage = $"Published PaymentReceivedEvent: ${paymentEvent.Amount} via {paymentEvent.PaymentMethod}";
+        Logger.LogInformation("Published payment received event: ${Amount}", paymentEvent.Amount);
+        StateHasChanged();
+    }
+}
