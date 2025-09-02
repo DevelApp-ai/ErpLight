@@ -4,6 +4,10 @@
     <ProjectReference Include="..\ERP.SharedKernel\ERP.SharedKernel.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="DevelApp.RuntimePluggableClassFactory" Version="2.0.1" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
