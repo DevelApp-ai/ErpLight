@@ -1,6 +1,7 @@
 using ERP.SharedKernel.Contracts;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
+using DevelApp.Utility.Model;
 
 namespace ERP.Plugin.Finance;
 
@@ -9,9 +10,15 @@ namespace ERP.Plugin.Finance;
 /// </summary>
 public class FinanceModule : IPluginModule, INavigationProvider
 {
+    // IPluginModule properties (for backward compatibility)
     public string ModuleId => "Finance";
     public string DisplayName => "Finance Module";
-    public string Version => "1.0.0";
+    
+    // IPluginClass properties (required by RuntimePluggableClassFactory)
+    public IdentifierString Name => "FinanceModule";
+    public NamespaceString Module => "Finance";
+    public string Description => "Finance Module - Provides financial management capabilities including invoices, payments, and reports";
+    public SemanticVersionNumber Version => "1.0.0";
 
     public void ConfigureServices(IServiceCollection services)
     {

@@ -14,4 +14,9 @@
     </ProjectReference>
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="DevelApp.RuntimePluggableClassFactory.Interface" Version="2.0.1" />
+    <PackageReference Include="DevelApp.Utility" Version="1.0.7" />
+  </ItemGroup>
+
 </Project>

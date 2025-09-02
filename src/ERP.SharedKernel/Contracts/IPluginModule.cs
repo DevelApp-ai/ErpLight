@@ -1,13 +1,15 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
+using DevelApp.RuntimePluggableClassFactory.Interface;
 
 namespace ERP.SharedKernel.Contracts;
 
 /// <summary>
 /// Core interface that all plugin modules must implement to integrate with the host application.
 /// This is the primary contract for plugin lifecycle management.
+/// Extends IPluginClass to be compatible with RuntimePluggableClassFactory.
 /// </summary>
-public interface IPluginModule
+public interface IPluginModule : IPluginClass
 {
     /// <summary>
     /// Gets the unique identifier for this plugin module.
@@ -18,11 +20,6 @@ public interface IPluginModule
     /// Gets the display name for this plugin module.
     /// </summary>
     string DisplayName { get; }
-
-    /// <summary>
-    /// Gets the version of this plugin module.
-    /// </summary>
-    string Version { get; }
 
     /// <summary>
     /// Called during application startup to register services with the dependency injection container.
