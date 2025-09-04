@@ -15,25 +15,43 @@ builder.Services.AddSingleton<IEventPublisher, EventPublisher>();
 // Add logging
 builder.Services.AddLogging();
 
-var app = builder.Build();
-
-// Initialize plugin system
-var pluginManager = app.Services.GetRequiredService<PluginManager>();
-var pluginsDirectory = Path.Combine(app.Environment.ContentRootPath, "plugins");
+// Initialize plugin system BEFORE building the app
+var tempServiceProvider = builder.Services.BuildServiceProvider();
+var pluginManager = tempServiceProvider.GetRequiredService<PluginManager>();
+var pluginsDirectory = Path.Combine(builder.Environment.ContentRootPath, "plugins");
 await pluginManager.DiscoverAndLoadPluginsAsync(pluginsDirectory);
 
-// Configure plugins
+// Configure plugin services BEFORE building the app
 foreach (var plugin in pluginManager.LoadedPlugins)
 {
     try
     {
         plugin.ConfigureServices(builder.Services);
+    }
+    catch (Exception ex)
+    {
+        var logger = tempServiceProvider.GetRequiredService<ILogger<Program>>();
+        logger.LogError(ex, "Failed to configure services for plugin {ModuleId}", plugin.ModuleId);
+    }
+}
+
+// Register the configured plugin manager as singleton
+builder.Services.AddSingleton(pluginManager);
+
+var app = builder.Build();
+
+// Configure plugin middleware AFTER building the app
+var finalPluginManager = app.Services.GetRequiredService<PluginManager>();
+foreach (var plugin in finalPluginManager.LoadedPlugins)
+{
+    try
+    {
         plugin.Configure(app);
     }
     catch (Exception ex)
     {
         var logger = app.Services.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "Failed to configure plugin {ModuleId}", plugin.ModuleId);
+        logger.LogError(ex, "Failed to configure middleware for plugin {ModuleId}", plugin.ModuleId);
     }
 }
 
@@ -56,7 +74,8 @@ app.MapRazorComponents<App>()
 // Handle graceful shutdown of plugins
 app.Lifetime.ApplicationStopping.Register(async () =>
 {
-    await pluginManager.ShutdownAsync();
+    var shutdownPluginManager = app.Services.GetRequiredService<PluginManager>();
+    await shutdownPluginManager.ShutdownAsync();
 });
 
 app.Run();

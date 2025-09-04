@@ -3,6 +3,7 @@
 @using ERP.SharedKernel.Contracts
 @using ERP.Host.Services
 @using ERP.Plugin.Finance.Events
+@using ERP.Plugin.Inventory.Events
 @inject PluginManager PluginManager
 @inject IEventPublisher EventPublisher
 @inject ILogger<PluginDemo> Logger
@@ -51,6 +52,14 @@
                 <br />
                 <button class="btn btn-success mb-2" @onclick="PublishPaymentReceivedEvent">
                     Publish Payment Received Event
+                </button>
+                <br />
+                <button class="btn btn-info mb-2" @onclick="PublishProductAddedEvent">
+                    Publish Product Added Event
+                </button>
+                <br />
+                <button class="btn btn-warning mb-2" @onclick="PublishLowStockAlertEvent">
+                    Publish Low Stock Alert Event
                 </button>
                 
                 @if (!string.IsNullOrEmpty(lastEventMessage))
@@ -129,6 +138,39 @@
         await EventPublisher.PublishAsync(paymentEvent);
         lastEventMessage = $"Published PaymentReceivedEvent: ${paymentEvent.Amount} via {paymentEvent.PaymentMethod}";
         Logger.LogInformation("Published payment received event: ${Amount}", paymentEvent.Amount);
+        StateHasChanged();
+    }
+
+    private async Task PublishProductAddedEvent()
+    {
+        var productEvent = new ProductAddedEvent(
+            productId: Guid.NewGuid(),
+            productName: "Premium Laptop",
+            productCode: $"PROD-{DateTime.Now:yyyyMMdd}-001",
+            quantity: 25,
+            unitPrice: 1299.99m,
+            category: "Electronics"
+        );
+
+        await EventPublisher.PublishAsync(productEvent);
+        lastEventMessage = $"Published ProductAddedEvent: {productEvent.ProductName} (Code: {productEvent.ProductCode}) - Qty: {productEvent.Quantity}";
+        Logger.LogInformation("Published product added event: {ProductName}", productEvent.ProductName);
+        StateHasChanged();
+    }
+
+    private async Task PublishLowStockAlertEvent()
+    {
+        var alertEvent = new LowStockAlertEvent(
+            productId: Guid.NewGuid(),
+            productName: "Wireless Mouse",
+            productCode: "PROD-MOUSE-001",
+            currentQuantity: 3,
+            thresholdLevel: 10
+        );
+
+        await EventPublisher.PublishAsync(alertEvent);
+        lastEventMessage = $"Published LowStockAlertEvent: {alertEvent.ProductName} - Only {alertEvent.CurrentQuantity} left (Threshold: {alertEvent.ThresholdLevel})";
+        Logger.LogInformation("Published low stock alert event: {ProductName}", alertEvent.ProductName);
         StateHasChanged();
     }
 }
