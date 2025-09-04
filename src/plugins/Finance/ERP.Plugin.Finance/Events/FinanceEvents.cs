@@ -1,6 +1,6 @@
 using ERP.SharedKernel.Events;
 
-namespace ERP.SharedKernel.Events;
+namespace ERP.Plugin.Finance.Events;
 
 /// <summary>
 /// Event published when an invoice is created in the Finance module.
