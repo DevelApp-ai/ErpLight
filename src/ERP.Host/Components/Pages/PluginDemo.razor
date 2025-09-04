@@ -4,6 +4,8 @@
 @using ERP.Host.Services
 @using ERP.Plugin.Finance.Events
 @using ERP.Plugin.Inventory.Events
+@using ERP.Plugin.Products.Events
+@using ERP.Plugin.Orders.Events
 @inject PluginManager PluginManager
 @inject IEventPublisher EventPublisher
 @inject ILogger<PluginDemo> Logger
@@ -60,6 +62,14 @@
                 <br />
                 <button class="btn btn-warning mb-2" @onclick="PublishLowStockAlertEvent">
                     Publish Low Stock Alert Event
+                </button>
+                <br />
+                <button class="btn btn-secondary mb-2" @onclick="PublishProductCatalogCreatedEvent">
+                    Publish Product Catalog Created Event
+                </button>
+                <br />
+                <button class="btn btn-dark mb-2" @onclick="PublishOrderCreatedEvent">
+                    Publish Order Created Event
                 </button>
                 
                 @if (!string.IsNullOrEmpty(lastEventMessage))
@@ -171,6 +181,42 @@
         await EventPublisher.PublishAsync(alertEvent);
         lastEventMessage = $"Published LowStockAlertEvent: {alertEvent.ProductName} - Only {alertEvent.CurrentQuantity} left (Threshold: {alertEvent.ThresholdLevel})";
         Logger.LogInformation("Published low stock alert event: {ProductName}", alertEvent.ProductName);
+        StateHasChanged();
+    }
+
+    private async Task PublishProductCatalogCreatedEvent()
+    {
+        var productEvent = new ProductCatalogCreatedEvent(
+            productId: Guid.NewGuid(),
+            productName: "Gaming Laptop",
+            productCode: $"GAM-{DateTime.Now:yyyyMMdd}-001",
+            brand: "TechBrand",
+            category: "Gaming",
+            price: 1899.99m,
+            description: "High-performance gaming laptop with RGB keyboard"
+        );
+
+        await EventPublisher.PublishAsync(productEvent);
+        lastEventMessage = $"Published ProductCatalogCreatedEvent: {productEvent.ProductName} (Brand: {productEvent.Brand}) - ${productEvent.Price}";
+        Logger.LogInformation("Published product catalog created event: {ProductName}", productEvent.ProductName);
+        StateHasChanged();
+    }
+
+    private async Task PublishOrderCreatedEvent()
+    {
+        var orderEvent = new OrderCreatedEvent(
+            orderId: Guid.NewGuid(),
+            orderNumber: $"ORD-{DateTime.Now:yyyyMMdd}-001",
+            orderType: "Sales",
+            customerId: "CUST-001",
+            totalAmount: 2999.99m,
+            orderDate: DateTime.Now,
+            status: "Created"
+        );
+
+        await EventPublisher.PublishAsync(orderEvent);
+        lastEventMessage = $"Published OrderCreatedEvent: {orderEvent.OrderNumber} ({orderEvent.OrderType}) - ${orderEvent.TotalAmount}";
+        Logger.LogInformation("Published order created event: {OrderNumber}", orderEvent.OrderNumber);
         StateHasChanged();
     }
 }
