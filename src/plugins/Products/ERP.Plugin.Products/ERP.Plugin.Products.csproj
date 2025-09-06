@@ -4,6 +4,20 @@
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    
+    <!-- NuGet Package Configuration -->
+    <PackageId>ERP.Plugin.Products</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>DevelApp.ai</Authors>
+    <Company>DevelApp.ai</Company>
+    <Description>Products catalog plugin for ErpLight ERP system. Provides product catalog management, categories, brands, and specifications.</Description>
+    <PackageTags>ERP;Plugin;Products;Catalog;Categories;Brands</PackageTags>
+    <RepositoryUrl>https://github.com/DevelApp-ai/ErpLight</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>
 
   <ItemGroup>

@@ -416,3 +416,13 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# Plugin binaries and runtime artifacts
+src/ERP.Host/plugins/*.dll
+src/ERP.Host/plugins/*.pdb
+src/ERP.Host/plugins/*.deps.json
+src/ERP.Host/plugins/*.runtimeconfig.json
+
+# Runtime generated plugin directories
+**/plugins/**
+!**/plugins/.gitkeep
