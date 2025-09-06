@@ -7,11 +7,19 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
-  <!-- Use project references for local development (default) -->
+  <!-- Primary demonstration: Use RuntimePluggableClassFactory from NuGet -->
   <ItemGroup>
-    <ProjectReference Include="..\ERP.SharedKernel\ERP.SharedKernel.csproj" />
+    <PackageReference Include="DevelApp.RuntimePluggableClassFactory" Version="2.0.1" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.0" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="8.0.0" />
+  </ItemGroup>
+
+  <!-- For this demo, we reference the local SharedKernel to define the plugin interface -->
+  <!-- In a real scenario, this would also be a NuGet package -->
+  <ItemGroup>
+    <ProjectReference Include="..\ERP.SharedKernel\ERP.SharedKernel.csproj" />
   </ItemGroup>
 
 </Project>

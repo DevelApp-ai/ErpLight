@@ -1,28 +1,157 @@
-# ErpLight - Modular ERP System
+# ErpLight - RuntimePluggableClassFactory 2.0.1 Demonstration
 
-ErpLight is a modular Enterprise Resource Planning (ERP) system built with .NET 8 and a plugin architecture. It demonstrates the **Modular Monolith** pattern, where business capabilities are organized into independently developed plugins that are deployed together as a single application.
+ErpLight is a **comprehensive demonstration** of the [DevelApp.RuntimePluggableClassFactory 2.0.1](https://github.com/DevelApp-ai/RuntimePluggableClassFactory) NuGet package, showcasing dynamic plugin discovery and loading in enterprise applications. This modular ERP system demonstrates the **Modular Monolith** pattern with runtime plugin architecture.
+
+## 🚀 RuntimePluggableClassFactory Features Demonstrated
+
+This project serves as a **real-world example** of the RuntimePluggableClassFactory capabilities:
+
+### ✅ Key Features Showcased
+- **Dynamic Plugin Discovery**: Automatically finds plugin assemblies at runtime
+- **Type-Safe Loading**: Generic constraints ensure plugins implement required interfaces
+- **Rich Metadata Support**: Plugin versioning, descriptions, and namespace organization
+- **Error Handling**: Robust error reporting with event-driven monitoring
+- **Flexible Architecture**: Load plugins from directories, NuGet packages, or URLs
+- **Enterprise Integration**: Complete integration with ASP.NET Core and dependency injection
+
+### 📋 What You'll See
+1. **Plugin Factory Initialization** - Setting up the RuntimePluggableClassFactory
+2. **Dynamic Discovery** - Scanning directories for plugin assemblies
+3. **Metadata Analysis** - Rich plugin information with semantic versioning
+4. **Type-Safe Instantiation** - Creating plugin instances with interface constraints
+5. **Lifecycle Management** - Plugin initialization and shutdown workflows
+6. **Error Monitoring** - Event-driven error handling and recovery
+
+## 🎯 Quick Start - See RuntimePluggableClassFactory in Action
+
+### 1. Run the Interactive Demo
+```bash
+cd src/ERP.NuGetDemo
+dotnet run
+```
+
+### 2. Start the Full ERP Application
+```bash
+cd src/ERP.Host
+dotnet run
+```
+
+### 3. View the Live Plugin System
+Navigate to https://localhost:5001 to see:
+- 4 plugins loaded dynamically via RuntimePluggableClassFactory
+- Complete navigation system built from plugin metadata
+- Event publishing system across all modules
+- Real-time plugin status and information
 
 ## 🏗️ Architecture
 
-The system consists of three main components:
+The system demonstrates enterprise-grade plugin architecture using RuntimePluggableClassFactory:
 
 ### 1. Host Application Shell (`ERP.Host`)
-- ASP.NET Core 8 Blazor Server application
-- Manages plugin lifecycle (discovery, loading, initialization)
-- Provides core services (logging, configuration, authentication)
-- Renders the main UI shell with dynamic navigation
+- **RuntimePluggableClassFactory Integration**: Uses `PluginClassFactory<IPluginModule>` for discovery
+- **FilePluginLoader**: Scans directories for plugin assemblies
+- **Event Monitoring**: Subscribes to `PluginInstantiationFailed` events
+- **Dynamic Navigation**: Builds UI from discovered plugin metadata
+- **Service Integration**: Registers plugin services with ASP.NET Core DI
 
 ### 2. Shared Kernel (`ERP.SharedKernel`)
-- Contains contracts and interfaces for plugin communication
-- Defines core entities and domain events
-- Minimal by design to prevent tight coupling
+- **IPluginModule Interface**: Extends `IPluginClass` for RuntimePluggableClassFactory compatibility
+- **Plugin Contracts**: Defines metadata requirements (Name, Module, Version, Description)
+- **Domain Events**: Shared event system across all plugins
+- **Minimal Dependencies**: Clean separation of concerns
 
-### 3. Plugin Modules
-- Self-contained business capability modules
-- Currently implemented: **Finance Module**
-- Each plugin can contribute navigation items, services, and UI components
+### 3. Plugin Modules (Loaded via RuntimePluggableClassFactory)
 
-## 🚀 Key Features
+All plugins implement the `IPluginModule` interface and are discovered/loaded using RuntimePluggableClassFactory:
+
+#### 📦 **Finance Module** (`ERP.Plugin.Finance`)
+- **Capabilities**: Invoice creation, payment processing, financial reporting
+- **Events**: `InvoiceCreatedEvent`, `PaymentReceivedEvent`
+- **Services**: `IInvoiceService` for business logic
+- **Navigation**: Finance, Invoices, Payments, Reports
+
+#### 📋 **Inventory Module** (`ERP.Plugin.Inventory`)
+- **Capabilities**: Stock management, inventory tracking, alerts
+- **Events**: `LowStockAlertEvent`, `StockUpdatedEvent`
+- **Services**: `IInventoryService` for stock operations
+- **Navigation**: Inventory, Products, Stock Levels, Categories, Alerts
+
+#### 🛍️ **Products Module** (`ERP.Plugin.Products`)
+- **Capabilities**: Product catalog management, categorization
+- **Events**: `ProductCatalogCreatedEvent`, `ProductUpdatedEvent`, `ProductDiscontinuedEvent`
+- **Services**: `IProductCatalogService` for catalog operations
+- **Navigation**: Products, Product Catalog, Categories, Brands, Specifications
+
+#### 📋 **Orders Module** (`ERP.Plugin.Orders`)
+- **Capabilities**: Order lifecycle management, fulfillment tracking
+- **Events**: `OrderCreatedEvent`, `OrderUpdatedEvent`, `OrderFulfilledEvent`, `OrderCancelledEvent`
+- **Services**: `IOrderService` for order processing
+- **Navigation**: Orders, Sales Orders, Purchase Orders, Order History, Fulfillment
+
+## 🚀 RuntimePluggableClassFactory Integration
+
+### Plugin Loading Workflow
+```csharp
+// 1. Initialize RuntimePluggableClassFactory
+var fileLoader = new FilePluginLoader<IPluginModule>(pluginDirectoryUri);
+var factory = new PluginClassFactory<IPluginModule>(fileLoader);
+
+// 2. Subscribe to error events
+factory.PluginInstantiationFailed += OnPluginInstantiationFailed;
+
+// 3. Discover available plugins
+await factory.RefreshPluginsAsync();
+var availablePlugins = await factory.GetPossiblePlugins();
+
+// 4. Load each plugin with metadata
+foreach (var pluginInfo in availablePlugins)
+{
+    var instance = factory.GetInstance(pluginInfo.moduleName, pluginInfo.pluginName);
+    await instance.InitializeAsync(serviceProvider);
+}
+```
+
+### Plugin Interface Contract
+```csharp
+public interface IPluginModule : IPluginClass
+{
+    // RuntimePluggableClassFactory properties (from IPluginClass)
+    IdentifierString Name { get; }           // Plugin identifier
+    NamespaceString Module { get; }          // Module namespace 
+    string Description { get; }              // Rich description
+    SemanticVersionNumber Version { get; }   // Semantic versioning
+
+    // ERP-specific properties and methods
+    string ModuleId { get; }
+    string DisplayName { get; }
+    void ConfigureServices(IServiceCollection services);
+    void Configure(IApplicationBuilder app);
+    Task InitializeAsync(IServiceProvider serviceProvider);
+    Task ShutdownAsync();
+}
+```
+
+## 🎯 Demonstrated Benefits
+
+### For Plugin Developers
+- **Metadata Rich**: Semantic versioning, descriptions, namespace organization
+- **Type Safety**: Compile-time interface compliance verification
+- **Error Handling**: Detailed error reporting with stack traces
+- **Lifecycle Management**: Proper initialization and cleanup
+
+### For Application Hosts  
+- **Dynamic Discovery**: No manual registration or configuration required
+- **Flexible Loading**: Support for files, directories, URLs, NuGet packages
+- **Runtime Monitoring**: Event-driven plugin status monitoring
+- **Graceful Degradation**: Application continues if some plugins fail
+
+### For Enterprise Architecture
+- **Modular Development**: Teams can develop plugins independently
+- **Version Management**: Support for multiple plugin versions
+- **Deployment Flexibility**: Hot-swappable business logic
+- **Extension Points**: Third-party plugin marketplace support
+
+## 🔧 Key Features
 
 - **Plugin System**: Dynamic loading of business modules using `AssemblyLoadContext`
 - **Event-Driven Communication**: Asynchronous, decoupled communication between plugins
