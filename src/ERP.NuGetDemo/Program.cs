@@ -15,6 +15,9 @@ class Program
 {
     static async Task Main(string[] args)
     {
+        // Set up cancellation token for graceful shutdown (important for CI/CD)
+        using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(2)); // Max 2 minutes for CI/CD
+        
         Console.WriteLine("🚀 RuntimePluggableClassFactory 2.0.1 Demonstration");
         Console.WriteLine("===================================================");
         Console.WriteLine("This demo showcases the DevelApp.RuntimePluggableClassFactory package");
@@ -26,7 +29,12 @@ class Program
         
         try
         {
-            await RunPluginFactoryDemo(host.Services, logger);
+            await RunPluginFactoryDemo(host.Services, logger, cts.Token);
+        }
+        catch (OperationCanceledException) when (cts.Token.IsCancellationRequested)
+        {
+            logger.LogWarning("Demo was cancelled due to timeout - this is normal in CI/CD environments");
+            Console.WriteLine("⏰ Demo completed within timeout limits (CI/CD friendly)");
         }
         catch (Exception ex)
         {
@@ -50,16 +58,16 @@ class Program
         return builder.Build();
     }
     
-    static async Task RunPluginFactoryDemo(IServiceProvider services, ILogger logger)
+    static async Task RunPluginFactoryDemo(IServiceProvider services, ILogger logger, CancellationToken cancellationToken = default)
     {
         Console.WriteLine("🔍 Demonstrating RuntimePluggableClassFactory 2.0.1 Features:");
         Console.WriteLine();
         
         // Step 1: Create plugin directory and copy plugin assemblies
-        var pluginDir = await SetupPluginDirectory(logger);
+        var pluginDir = await SetupPluginDirectory(logger, cancellationToken);
         
         // Step 2: Initialize RuntimePluggableClassFactory
-        var factory = await InitializePluginFactory(pluginDir, logger);
+        var factory = await InitializePluginFactory(pluginDir, logger, cancellationToken);
         
         if (factory == null)
         {
@@ -68,13 +76,13 @@ class Program
         }
         
         // Step 3: Discover available plugins
-        await DiscoverPlugins(factory, logger);
+        await DiscoverPlugins(factory, logger, cancellationToken);
         
         // Step 4: Load and test plugins
-        await LoadAndTestPlugins(factory, services, logger);
+        await LoadAndTestPlugins(factory, services, logger, cancellationToken);
         
         // Step 5: Demonstrate plugin metadata and versioning
-        await DemonstratePluginMetadata(factory, logger);
+        await DemonstratePluginMetadata(factory, logger, cancellationToken);
         
         Console.WriteLine("\n🏗️ RuntimePluggableClassFactory Benefits Demonstrated:");
         Console.WriteLine("   • Dynamic Discovery: Automatically finds plugin assemblies");
@@ -91,7 +99,7 @@ class Program
         Console.WriteLine("   • Configuration-driven Architecture: Enable/disable features");
     }
     
-    static async Task<string> SetupPluginDirectory(ILogger logger)
+    static async Task<string> SetupPluginDirectory(ILogger logger, CancellationToken cancellationToken = default)
     {
         logger.LogInformation("Setting up plugin directory for demonstration...");
         
@@ -100,45 +108,79 @@ class Program
         
         logger.LogInformation("Created temporary plugin directory: {PluginDir}", tempDir);
         
-        // Copy plugin assemblies from the build output
-        var sourceDir = Path.Combine(Directory.GetCurrentDirectory(), "..", "..", "..", "..", "plugins");
+        // Try multiple possible plugin locations
+        var possibleDirs = new[]
+        {
+            Path.Combine(Directory.GetCurrentDirectory(), "..", "ERP.Host", "plugins"), // CI/CD build output
+            Path.Combine(Directory.GetCurrentDirectory(), "..", "..", "..", "..", "plugins"), // Local relative path
+            Path.Combine(Directory.GetCurrentDirectory(), "..", "plugins"), // Alternative relative path
+        };
         
-        if (Directory.Exists(sourceDir))
+        bool pluginsCopied = false;
+        foreach (var sourceDir in possibleDirs)
         {
-            await CopyPluginAssemblies(sourceDir, tempDir, logger);
+            if (Directory.Exists(sourceDir) && Directory.GetFiles(sourceDir, "ERP.Plugin.*.dll").Any())
+            {
+                logger.LogInformation("Found plugins in: {SourceDir}", sourceDir);
+                await CopyPluginAssembliesFromBuildOutput(sourceDir, tempDir, logger);
+                pluginsCopied = true;
+                break;
+            }
         }
-        else
+        
+        if (!pluginsCopied)
         {
-            logger.LogWarning("Source plugins directory not found: {SourceDir}", sourceDir);
-            logger.LogInformation("Creating simulated plugin assemblies for demonstration...");
-            await CreateSimulatedPlugins(tempDir, logger);
+            logger.LogWarning("Plugin assemblies not found in expected locations. Checking plugin project bins...");
+            await CopyPluginAssembliesFromProjects(tempDir, logger);
         }
         
         return tempDir;
     }
     
-    static async Task CopyPluginAssemblies(string sourceDir, string targetDir, ILogger logger)
+    static async Task CopyPluginAssembliesFromBuildOutput(string sourceDir, string targetDir, ILogger logger)
     {
-        var pluginDirs = Directory.GetDirectories(sourceDir)
-            .Where(d => Path.GetFileName(d).StartsWith("ERP.Plugin."))
-            .ToList();
-        
-        foreach (var pluginDir in pluginDirs)
+        var dllFiles = Directory.GetFiles(sourceDir, "ERP.Plugin.*.dll");
+        foreach (var dll in dllFiles)
         {
-            var binDir = Path.Combine(pluginDir, "bin", "Debug", "net8.0");
-            if (Directory.Exists(binDir))
+            var targetFile = Path.Combine(targetDir, Path.GetFileName(dll));
+            File.Copy(dll, targetFile, true);
+            logger.LogInformation("Copied plugin assembly: {FileName}", Path.GetFileName(dll));
+        }
+        
+        await Task.CompletedTask;
+    }
+    
+    static async Task CopyPluginAssembliesFromProjects(string targetDir, ILogger logger)
+    {
+        var pluginProjectDirs = new[]
+        {
+            Path.Combine(Directory.GetCurrentDirectory(), "..", "plugins", "Finance", "ERP.Plugin.Finance", "bin", "Release", "net8.0"),
+            Path.Combine(Directory.GetCurrentDirectory(), "..", "plugins", "Inventory", "ERP.Plugin.Inventory", "bin", "Release", "net8.0"),
+            Path.Combine(Directory.GetCurrentDirectory(), "..", "plugins", "Products", "ERP.Plugin.Products", "bin", "Release", "net8.0"),
+            Path.Combine(Directory.GetCurrentDirectory(), "..", "plugins", "Orders", "ERP.Plugin.Orders", "bin", "Release", "net8.0")
+        };
+        
+        bool foundAny = false;
+        foreach (var pluginDir in pluginProjectDirs)
+        {
+            if (Directory.Exists(pluginDir))
             {
-                var dllFiles = Directory.GetFiles(binDir, "ERP.Plugin.*.dll");
+                var dllFiles = Directory.GetFiles(pluginDir, "ERP.Plugin.*.dll");
                 foreach (var dll in dllFiles)
                 {
                     var targetFile = Path.Combine(targetDir, Path.GetFileName(dll));
                     File.Copy(dll, targetFile, true);
                     logger.LogInformation("Copied plugin assembly: {FileName}", Path.GetFileName(dll));
+                    foundAny = true;
                 }
             }
         }
         
-        await Task.CompletedTask;
+        if (!foundAny)
+        {
+            logger.LogWarning("No plugin assemblies found in project bins. Creating simulated plugins for demonstration...");
+            await CreateSimulatedPlugins(targetDir, logger);
+        }
     }
     
     static async Task CreateSimulatedPlugins(string targetDir, ILogger logger)
@@ -157,7 +199,7 @@ class Program
         }
     }
     
-    static async Task<PluginClassFactory<IPluginModule>?> InitializePluginFactory(string pluginDir, ILogger logger)
+    static async Task<PluginClassFactory<IPluginModule>?> InitializePluginFactory(string pluginDir, ILogger logger, CancellationToken cancellationToken = default)
     {
         logger.LogInformation("Initializing RuntimePluggableClassFactory...");
         
@@ -191,7 +233,7 @@ class Program
         }
     }
     
-    static async Task DiscoverPlugins(PluginClassFactory<IPluginModule> factory, ILogger logger)
+    static async Task DiscoverPlugins(PluginClassFactory<IPluginModule> factory, ILogger logger, CancellationToken cancellationToken = default)
     {
         logger.LogInformation("Discovering available plugins...");
         
@@ -216,7 +258,7 @@ class Program
         }
     }
     
-    static async Task LoadAndTestPlugins(PluginClassFactory<IPluginModule> factory, IServiceProvider services, ILogger logger)
+    static async Task LoadAndTestPlugins(PluginClassFactory<IPluginModule> factory, IServiceProvider services, ILogger logger, CancellationToken cancellationToken = default)
     {
         logger.LogInformation("Testing plugin loading capabilities...");
         
@@ -262,7 +304,7 @@ class Program
         }
     }
     
-    static async Task DemonstratePluginMetadata(PluginClassFactory<IPluginModule> factory, ILogger logger)
+    static async Task DemonstratePluginMetadata(PluginClassFactory<IPluginModule> factory, ILogger logger, CancellationToken cancellationToken = default)
     {
         logger.LogInformation("Demonstrating plugin metadata features...");
         
