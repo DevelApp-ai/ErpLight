@@ -50,8 +50,15 @@ public class EventPublisher : IEventPublisher
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error invoking event handler {HandlerType} for event {EventType}", 
-                    handler.GetType().Name, domainEvent.EventType);
+                if (handler != null)
+                {
+                    _logger.LogError(ex, "Error invoking event handler {HandlerType} for event {EventType}", 
+                        handler.GetType().Name, domainEvent.EventType);
+                }
+                else
+                {
+                    _logger.LogError(ex, "Error invoking event handler for event {EventType} (handler was null)", domainEvent.EventType);
+                }
             }
         }
 

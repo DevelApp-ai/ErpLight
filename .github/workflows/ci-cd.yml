@@ -52,9 +52,27 @@ jobs:
         dotnet build src/ERP.NuGetDemo/ERP.NuGetDemo.csproj --configuration Release
         
     - name: Test plugin loading with NuGet demo
+      shell: bash
       run: |
         cd src/ERP.NuGetDemo
-        timeout 60s dotnet run --configuration Release --no-build || echo "Demo completed or timed out safely"
+        if [[ "${{ runner.os }}" == "Windows" ]]; then
+          # Windows: Use PowerShell with timeout
+          powershell -Command "& {
+            \$timeout = 60
+            \$job = Start-Job -ScriptBlock { dotnet run --configuration Release --no-build }
+            if (Wait-Job \$job -Timeout \$timeout) {
+              Receive-Job \$job
+              Remove-Job \$job
+            } else {
+              Stop-Job \$job
+              Remove-Job \$job
+              Write-Host 'Demo completed or timed out safely'
+            }
+          }"
+        else
+          # Unix/Linux/macOS: Use timeout command
+          timeout 60s dotnet run --configuration Release --no-build || echo "Demo completed or timed out safely"
+        fi
 
   package:
     needs: build-and-test
