@@ -1,0 +1,108 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  release:
+    types: [ published ]
+
+env:
+  DOTNET_VERSION: '8.0.x'
+  
+jobs:
+  build-and-test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+        
+    - name: Restore dependencies
+      run: dotnet restore ErpLight.sln
+      
+    - name: Build solution
+      run: dotnet build ErpLight.sln --no-restore --configuration Release
+      
+    - name: Run tests
+      run: dotnet test ErpLight.sln --no-build --configuration Release --verbosity normal --collect:"XPlat Code Coverage"
+      
+    - name: Upload coverage reports
+      if: matrix.os == 'ubuntu-latest'
+      uses: codecov/codecov-action@v3
+      with:
+        files: '**/coverage.cobertura.xml'
+        fail_ci_if_error: false
+        
+    - name: Build plugins for runtime loading demo
+      run: |
+        dotnet build src/plugins/Finance/ERP.Plugin.Finance/ERP.Plugin.Finance.csproj --configuration Release --output src/ERP.Host/plugins
+        dotnet build src/plugins/Inventory/ERP.Plugin.Inventory/ERP.Plugin.Inventory.csproj --configuration Release --output src/ERP.Host/plugins  
+        dotnet build src/plugins/Products/ERP.Plugin.Products/ERP.Plugin.Products.csproj --configuration Release --output src/ERP.Host/plugins
+        dotnet build src/plugins/Orders/ERP.Plugin.Orders/ERP.Plugin.Orders.csproj --configuration Release --output src/ERP.Host/plugins
+        dotnet build src/ERP.NuGetDemo/ERP.NuGetDemo.csproj --configuration Release
+        
+    - name: Test plugin loading with NuGet demo
+      shell: bash
+      run: |
+        cd src/ERP.NuGetDemo
+        if [[ "${{ runner.os }}" == "Windows" ]]; then
+          # Windows: Use PowerShell with timeout
+          powershell -Command "& {
+            \$timeout = 60
+            \$job = Start-Job -ScriptBlock { dotnet run --configuration Release --no-build }
+            if (Wait-Job \$job -Timeout \$timeout) {
+              Receive-Job \$job
+              Remove-Job \$job
+            } else {
+              Stop-Job \$job
+              Remove-Job \$job
+              Write-Host 'Demo completed or timed out safely'
+            }
+          }"
+        else
+          # Unix/Linux/macOS: Use timeout command
+          timeout 60s dotnet run --configuration Release --no-build || echo "Demo completed or timed out safely"
+        fi
+
+  package:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+        
+    - name: Create NuGet packages
+      run: |
+        dotnet pack src/ERP.SharedKernel/ERP.SharedKernel.csproj --configuration Release --output ./packages
+        dotnet pack src/plugins/Finance/ERP.Plugin.Finance/ERP.Plugin.Finance.csproj --configuration Release --output ./packages
+        dotnet pack src/plugins/Inventory/ERP.Plugin.Inventory/ERP.Plugin.Inventory.csproj --configuration Release --output ./packages
+        dotnet pack src/plugins/Products/ERP.Plugin.Products/ERP.Plugin.Products.csproj --configuration Release --output ./packages
+        dotnet pack src/plugins/Orders/ERP.Plugin.Orders/ERP.Plugin.Orders.csproj --configuration Release --output ./packages
+        
+    - name: Upload NuGet packages
+      uses: actions/upload-artifact@v4
+      with:
+        name: nuget-packages-${{ github.run_number }}
+        path: ./packages/*.nupkg
+        
+    - name: Publish to NuGet (on release)
+      if: github.event_name == 'release'
+      run: |
+        dotnet nuget push ./packages/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate

@@ -1,0 +1,2 @@
+# This file ensures the plugins directory is preserved in git
+# The actual plugin DLLs are generated at runtime and should not be committed

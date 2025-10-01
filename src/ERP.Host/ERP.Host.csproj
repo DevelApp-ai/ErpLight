@@ -2,6 +2,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ERP.SharedKernel\ERP.SharedKernel.csproj" />
+    <ProjectReference Include="..\plugins\Finance\ERP.Plugin.Finance\ERP.Plugin.Finance.csproj" />
+    <ProjectReference Include="..\plugins\Inventory\ERP.Plugin.Inventory\ERP.Plugin.Inventory.csproj" />
+    <ProjectReference Include="..\plugins\Products\ERP.Plugin.Products\ERP.Plugin.Products.csproj" />
+    <ProjectReference Include="..\plugins\Orders\ERP.Plugin.Orders\ERP.Plugin.Orders.csproj" />
   </ItemGroup>
 
   <ItemGroup>

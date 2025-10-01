@@ -2,6 +2,7 @@ using ERP.SharedKernel.Contracts;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using DevelApp.Utility.Model;
+using ERP.Plugin.Finance.Services;
 
 namespace ERP.Plugin.Finance;
 
@@ -22,8 +23,8 @@ public class FinanceModule : IPluginModule, INavigationProvider
 
     public void ConfigureServices(IServiceCollection services)
     {
-        // Register finance-specific services here
-        // For now, this is a basic implementation
+        // Register finance-specific services
+        services.AddScoped<IInvoiceService, InvoiceService>();
     }
 
     public void Configure(IApplicationBuilder app)

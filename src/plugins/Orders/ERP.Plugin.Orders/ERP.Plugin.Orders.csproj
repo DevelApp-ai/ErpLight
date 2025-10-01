@@ -6,12 +6,12 @@
     <Nullable>enable</Nullable>
     
     <!-- NuGet Package Configuration -->
-    <PackageId>ERP.SharedKernel</PackageId>
+    <PackageId>ERP.Plugin.Orders</PackageId>
     <Version>1.0.0</Version>
     <Authors>DevelApp.ai</Authors>
     <Company>DevelApp.ai</Company>
-    <Description>Shared kernel for ErpLight plugin system providing common domain events, interfaces, and base classes.</Description>
-    <PackageTags>ERP;Plugin;SharedKernel;DomainEvents;CQRS</PackageTags>
+    <Description>Orders management plugin for ErpLight ERP system. Provides order lifecycle management, sales orders, purchase orders, and fulfillment.</Description>
+    <PackageTags>ERP;Plugin;Orders;Sales;Purchase;Fulfillment</PackageTags>
     <RepositoryUrl>https://github.com/DevelApp-ai/ErpLight</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -21,11 +21,16 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Reference SharedKernel with special configuration to prevent copying -->
+    <ProjectReference Include="..\..\..\ERP.SharedKernel\ERP.SharedKernel.csproj">
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </ProjectReference>
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="DevelApp.RuntimePluggableClassFactory.Interface" Version="2.0.1" />
     <PackageReference Include="DevelApp.Utility" Version="1.0.7" />
-    <PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" Version="2.2.0" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="8.0.0" />
   </ItemGroup>
 
 </Project>
