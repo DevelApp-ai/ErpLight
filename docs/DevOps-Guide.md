@@ -8,7 +8,7 @@ The project uses GitHub Actions for continuous integration and deployment:
 
 ### Pipeline Features
 - ✅ **Multi-platform builds**: Ubuntu, Windows, macOS
-- ✅ **Automated testing**: All 17 tests across 4 modules
+- ✅ **Automated testing**: 21 tests across 6 test projects
 - ✅ **NuGet packaging**: Automatic package creation
 - ✅ **Code coverage**: CodeCov integration
 - ✅ **Release automation**: Auto-publish on GitHub releases
@@ -118,9 +118,9 @@ dotnet build --no-restore
 ## 🔍 Quality Assurance
 
 ### Test Coverage
-- **17 tests** across all modules
-- **100% core functionality** covered
-- **Integration tests** for plugin loading
+- **21 tests** across host, shared kernel, and plugin modules
+- **Unit tests** for domain events and host event publishing
+- **Integration tests** for host health/readiness and correlation headers
 - **Cross-platform validation**
 
 ### Code Quality

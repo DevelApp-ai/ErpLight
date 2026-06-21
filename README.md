@@ -213,6 +213,9 @@ tests/
    ```
 
 5. **Navigate to** `http://localhost:5181`
+6. **Health endpoints**
+   - Live: `http://localhost:5181/health/live`
+   - Ready: `http://localhost:5181/health/ready`
 
 ### Running Tests
 ```bash
@@ -270,7 +273,8 @@ public class MyEventHandler : IEventHandler<InvoiceCreatedEvent>
 - ✅ **SharedKernel**: Contracts and domain events
 - ✅ **Finance Plugin**: Basic implementation with navigation
 - ✅ **Event System**: Asynchronous event publishing and handling
-- ✅ **Unit Tests**: Basic test coverage for domain events
+- ✅ **Testing**: Unit tests plus host integration tests for readiness and correlation IDs
+- ✅ **Operational Baseline**: Health/live and readiness probes with correlation ID propagation
 - 🔄 **In Development**: Additional business functionality and plugins
 
 ## 🎯 Next Steps
