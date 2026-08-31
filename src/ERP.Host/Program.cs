@@ -15,6 +15,8 @@ builder.Services.AddHealthChecks()
 // Register core services
 builder.Services.AddSingleton<PluginManager>();
 builder.Services.AddSingleton<IEventPublisher, EventPublisher>();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddSingleton<ICorrelationIdService, CorrelationIdService>();
 
 // Add logging
 builder.Services.AddLogging();
@@ -82,6 +84,10 @@ app.Use(async (context, next) =>
 
     context.Response.Headers[correlationIdHeader] = correlationId;
     context.TraceIdentifier = correlationId;
+    
+    // Store correlation ID in items for plugin access
+    context.Items["CorrelationId"] = correlationId;
+    
     await next();
 });
 

@@ -11,40 +11,14 @@
             </NavLink>
         </div>
 
-        <!-- Plugin navigation items -->
+        <!-- Plugin navigation items with proper nesting -->
         @foreach (var plugin in PluginManager.GetPlugins<INavigationProvider>())
         {
-            @foreach (var navItem in plugin.GetNavigationItems().OrderBy(x => x.Order))
-            {
-                <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="@navItem.Href">
-                        @if (!string.IsNullOrEmpty(navItem.Icon))
-                        {
-                            <span class="@navItem.Icon" aria-hidden="true"></span>
-                        }
-                        @navItem.Text
-                    </NavLink>
-                </div>
-
-                @if (navItem.Children.Any())
-                {
-                    @foreach (var childItem in navItem.Children.OrderBy(x => x.Order))
-                    {
-                        <div class="nav-item px-3 ms-3">
-                            <NavLink class="nav-link" href="@childItem.Href">
-                                @if (!string.IsNullOrEmpty(childItem.Icon))
-                                {
-                                    <span class="@childItem.Icon" aria-hidden="true"></span>
-                                }
-                                @childItem.Text
-                            </NavLink>
-                        </div>
-                    }
-                }
-            }
+            var navItems = plugin.GetNavigationItems().OrderBy(x => x.Order).ToList();
+            RenderNavigationItems(navItems, 0);
         }
 
-        <!-- Development navigation items (remove in production) -->
+        <!-- Development navigation items -->
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="plugin-demo">
                 <span class="bi bi-gear-fill" aria-hidden="true"></span> Plugin Demo
@@ -64,3 +38,41 @@
         </div>
     </nav>
 </div>
+
+@code {
+    private void RenderNavigationItems(IEnumerable<NavigationItem> items, int depth)
+    {
+        foreach (var navItem in items)
+        {
+            var paddingClass = depth switch { 0 => "px-3", 1 => "px-3 ms-2", 2 => "px-3 ms-3", _ => "px-3 ms-4" };
+            
+            <div class="nav-item @paddingClass">
+                <NavLink class="nav-link" href="@navItem.Href">
+                    @if (!string.IsNullOrEmpty(navItem.Icon))
+                    {
+                        <span class="@navItem.Icon" aria-hidden="true"></span>
+                    }
+                    @navItem.Text
+                </NavLink>
+            </div>
+
+            @if (navItem.Children.Any())
+            {
+                <div class="nav-item @paddingClass">
+                    @foreach (var childItem in navItem.Children.OrderBy(x => x.Order))
+                    {
+                        <div class="nav-item px-3 ms-3">
+                            <NavLink class="nav-link" href="@childItem.Href">
+                                @if (!string.IsNullOrEmpty(childItem.Icon))
+                                {
+                                    <span class="@childItem.Icon" aria-hidden="true"></span>
+                                }
+                                @childItem.Text
+                            </NavLink>
+                        </div>
+                    }
+                </div>
+            }
+        }
+    }
+}

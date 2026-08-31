@@ -118,8 +118,8 @@ dotnet build --no-restore
 ## 🔍 Quality Assurance
 
 ### Test Coverage
-- **21 tests** across host, shared kernel, and plugin modules
-- **Unit tests** for domain events and host event publishing
+- **~18 tests** across host, shared kernel, and 4 plugin modules
+- **Unit tests** for domain events (Finance, Inventory, Orders, Products plugins)
 - **Integration tests** for host health/readiness and correlation headers
 - **Cross-platform validation**
 

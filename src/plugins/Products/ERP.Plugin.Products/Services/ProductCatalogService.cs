@@ -1,4 +1,5 @@
 using ERP.Plugin.Products.Events;
+using ERP.SharedKernel.Events;
 
 namespace ERP.Plugin.Products.Services;
 
@@ -55,7 +56,13 @@ public class ProductInfo
 /// </summary>
 public class ProductCatalogService : IProductCatalogService
 {
+    private readonly IEventPublisher _eventPublisher;
     private readonly Dictionary<Guid, ProductInfo> _products = new();
+
+    public ProductCatalogService(IEventPublisher eventPublisher)
+    {
+        _eventPublisher = eventPublisher;
+    }
 
     public async Task<Guid> CreateProductAsync(string productName, string productCode, string brand, string category, decimal price, string description)
     {
@@ -76,10 +83,10 @@ public class ProductCatalogService : IProductCatalogService
         _products[productId] = product;
 
         // Publish domain event
-        var evt = new ProductCatalogCreatedEvent(productId, productName, productCode, brand, category, price, description);
-        // Note: In a real implementation, you would publish this event through an event bus
-        
-        await Task.CompletedTask;
+        var productCreatedEvent = new ProductCatalogCreatedEvent(productId, productName, productCode, brand, category, price, description);
+        await _eventPublisher.PublishAsync(productCreatedEvent);
+
+        return productId;
         return productId;
     }
 
@@ -102,11 +109,9 @@ public class ProductCatalogService : IProductCatalogService
             }
 
             // Publish domain event
-            var evt = new ProductUpdatedEvent(productId, product.ProductCode, field, oldValue, newValue, updatedBy);
-            // Note: In a real implementation, you would publish this event through an event bus
+            var productUpdatedEvent = new ProductUpdatedEvent(productId, product.ProductCode, field, oldValue, newValue, updatedBy);
+            await _eventPublisher.PublishAsync(productUpdatedEvent);
         }
-
-        await Task.CompletedTask;
     }
 
     public async Task DiscontinueProductAsync(Guid productId, string reason, string discontinuedBy)
@@ -117,11 +122,9 @@ public class ProductCatalogService : IProductCatalogService
             product.DiscontinuedAt = DateTime.UtcNow;
 
             // Publish domain event
-            var evt = new ProductDiscontinuedEvent(productId, product.ProductName, product.ProductCode, reason, discontinuedBy);
-            // Note: In a real implementation, you would publish this event through an event bus
+            var productDiscontinuedEvent = new ProductDiscontinuedEvent(productId, product.ProductName, product.ProductCode, reason, discontinuedBy);
+            await _eventPublisher.PublishAsync(productDiscontinuedEvent);
         }
-
-        await Task.CompletedTask;
     }
 
     public async Task<ProductInfo?> GetProductAsync(Guid productId)
