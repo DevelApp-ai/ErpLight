@@ -1,0 +1,137 @@
+@page "/account/register"
+@using ERP.Host.Models.Auth
+@using ERP.Host.Services.Auth
+@inject AuthService AuthService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Register</PageTitle>
+
+<div class="row justify-content-center">
+    <div class="col-md-6 col-lg-4">
+        <div class="card shadow">
+            <div class="card-header">
+                <h3 class="card-title text-center">Register</h3>
+            </div>
+            <div class="card-body">
+                <EditForm Model="@registerRequest" OnValidSubmit="HandleRegister">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+
+                    <div class="mb-3">
+                        <label for="email" class="form-label">Email address</label>
+                        <InputText @bind-Value="registerRequest.Email" class="form-control" id="email" placeholder="Enter email" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="userName" class="form-label">Username</label>
+                        <InputText @bind-Value="registerRequest.UserName" class="form-control" id="userName" placeholder="Enter username" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="firstName" class="form-label">First Name (Optional)</label>
+                        <InputText @bind-Value="registerRequest.FirstName" class="form-control" id="firstName" placeholder="Enter first name" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="lastName" class="form-label">Last Name (Optional)</label>
+                        <InputText @bind-Value="registerRequest.LastName" class="form-control" id="lastName" placeholder="Enter last name" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="password" class="form-label">Password</label>
+                        <InputText @bind-Value="registerRequest.Password" type="password" class="form-control" id="password" placeholder="Password" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="confirmPassword" class="form-label">Confirm Password</label>
+                        <InputText @bind-Value="registerRequest.ConfirmPassword" type="password" class="form-control" id="confirmPassword" placeholder="Confirm Password" />
+                    </div>
+
+                    @if (errorMessage != null)
+                    {
+                        <div class="alert alert-danger">@errorMessage</div>
+                    }
+
+                    @if (successMessage != null)
+                    {
+                        <div class="alert alert-success">@successMessage</div>
+                    }
+
+                    <button type="submit" class="btn btn-primary w-100" disabled="@isLoading">
+                        @if (isLoading)
+                        {
+                            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                            <span>Registering...</span>
+                        }
+                        else
+                        {
+                            <span>Register</span>
+                        }
+                    </button>
+                </EditForm>
+
+                <hr />
+
+                <div class="text-center">
+                    <p>Already have an account? <a href="/account/login">Login</a></p>
+                    <p><a href="/">Back to Home</a></p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private RegisterRequest registerRequest = new();
+    private string? errorMessage;
+    private string? successMessage;
+    private bool isLoading = false;
+
+    private async Task HandleRegister()
+    {
+        isLoading = true;
+        errorMessage = null;
+        successMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            if (registerRequest.Password != registerRequest.ConfirmPassword)
+            {
+                errorMessage = "Passwords do not match";
+                isLoading = false;
+                StateHasChanged();
+                return;
+            }
+
+            var result = await AuthService.RegisterAsync(registerRequest);
+
+            if (result.Success && result.Token != null)
+            {
+                // Store token in local storage
+                await localStorage.SetItemAsync("authToken", result.Token);
+                await localStorage.SetItemAsync("authTokenExpires", result.Expires?.ToString("o"));
+
+                successMessage = "Registration successful! Redirecting...";
+                StateHasChanged();
+
+                // Redirect after a brief delay
+                await Task.Delay(1000);
+                NavigationManager.NavigateTo("/", true);
+            }
+            else
+            {
+                errorMessage = result.ErrorMessage ?? "Registration failed";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "An error occurred during registration";
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+}
