@@ -1,7 +1,9 @@
 using ERP.SharedKernel.Contracts;
 using DevelApp.RuntimePluggableClassFactory;
 using DevelApp.RuntimePluggableClassFactory.FilePlugin;
+using DevelApp.Utility.Model;
 using System.Reflection;
+using Microsoft.Extensions.Configuration;
 
 namespace ERP.Host.Services;
 
@@ -23,13 +25,15 @@ public class PluginManager
 {
     private readonly ILogger<PluginManager> _logger;
     private readonly IServiceProvider _serviceProvider;
+    private readonly IConfiguration _configuration;
     private PluginClassFactory<IPluginModule>? _pluginFactory;
     private readonly List<IPluginModule> _loadedPlugins = new();
 
-    public PluginManager(ILogger<PluginManager> logger, IServiceProvider serviceProvider)
+    public PluginManager(ILogger<PluginManager> logger, IServiceProvider serviceProvider, IConfiguration configuration)
     {
         _logger = logger;
         _serviceProvider = serviceProvider;
+        _configuration = configuration;
     }
 
     /// <summary>
@@ -81,18 +85,19 @@ public class PluginManager
             
             // Step 5: Get discovered plugins with rich metadata
             var availablePlugins = await _pluginFactory.GetPossiblePlugins();
-            
-            _logger.LogInformation("📋 RuntimePluggableClassFactory discovered {PluginCount} plugin class(es)", availablePlugins.Count());
+            var filteredPlugins = ApplyPluginSecurityPolicies(availablePlugins);
+
+            _logger.LogInformation("📋 RuntimePluggableClassFactory discovered {PluginCount} plugin class(es), {AcceptedCount} accepted after policy validation", availablePlugins.Count(), filteredPlugins.Count);
 
             // Log detailed plugin information
-            foreach (var plugin in availablePlugins)
+            foreach (var plugin in filteredPlugins)
             {
                 _logger.LogDebug("Discovered Plugin: {Module}.{Name} v{Version} - {Description}", 
                     plugin.moduleName, plugin.pluginName, plugin.version, plugin.Description);
             }
 
             // If no plugins found via factory, try manual discovery as fallback
-            if (!availablePlugins.Any())
+            if (!filteredPlugins.Any())
             {
                 _logger.LogWarning("⚠️ No plugins found via RuntimePluggableClassFactory, attempting manual discovery as fallback...");
                 await DiscoverPluginsManually(pluginsDirectory);
@@ -100,7 +105,7 @@ public class PluginManager
             }
 
             // Step 6: Load each plugin using the factory
-            foreach (var pluginInfo in availablePlugins)
+            foreach (var pluginInfo in filteredPlugins)
             {
                 try
                 {
@@ -126,6 +131,43 @@ public class PluginManager
         {
             _logger.LogError(ex, "❌ Failed to discover plugins from '{PluginsDirectory}' using RuntimePluggableClassFactory", pluginsDirectory);
         }
+    }
+
+    private List<(NamespaceString moduleName, IdentifierString pluginName, SemanticVersionNumber version, string Description, Type Type)> ApplyPluginSecurityPolicies(IEnumerable<(NamespaceString moduleName, IdentifierString pluginName, SemanticVersionNumber version, string Description, Type Type)> discoveredPlugins)
+    {
+        var pluginSettings = _configuration.GetSection("PluginSettings");
+        var supportedVersions = pluginSettings.GetSection("SupportedPluginVersions").Get<string[]>() ?? Array.Empty<string>();
+        var allowedModules = pluginSettings.GetSection("AllowedModules").Get<string[]>() ?? Array.Empty<string>();
+        var enforceAllowList = pluginSettings.GetValue<bool>("EnforceAllowList");
+        var requireDescription = pluginSettings.GetSection("RuntimePluggableClassFactory:PluginValidation").GetValue<bool>("RequireDescription");
+
+        var acceptedPlugins = new List<(NamespaceString moduleName, IdentifierString pluginName, SemanticVersionNumber version, string Description, Type Type)>();
+
+        foreach (var plugin in discoveredPlugins)
+        {
+            var versionString = plugin.version.ToString();
+            if (supportedVersions.Length > 0 && !supportedVersions.Contains(versionString, StringComparer.OrdinalIgnoreCase))
+            {
+                _logger.LogWarning("🚫 Rejecting plugin {Module}.{Plugin}: unsupported version {Version}", plugin.moduleName, plugin.pluginName, versionString);
+                continue;
+            }
+
+            if (enforceAllowList && allowedModules.Length > 0 && !allowedModules.Contains(plugin.moduleName.ToString(), StringComparer.OrdinalIgnoreCase))
+            {
+                _logger.LogWarning("🚫 Rejecting plugin {Module}.{Plugin}: module not in allowlist", plugin.moduleName, plugin.pluginName);
+                continue;
+            }
+
+            if (requireDescription && string.IsNullOrWhiteSpace(plugin.Description))
+            {
+                _logger.LogWarning("🚫 Rejecting plugin {Module}.{Plugin}: description is required", plugin.moduleName, plugin.pluginName);
+                continue;
+            }
+
+            acceptedPlugins.Add(plugin);
+        }
+
+        return acceptedPlugins;
     }
 
     /// <summary>

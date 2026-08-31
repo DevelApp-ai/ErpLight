@@ -1,12 +1,16 @@
 using ERP.Host.Components;
 using ERP.Host.Services;
 using ERP.SharedKernel.Events;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
+builder.Services.AddHealthChecks()
+    .AddCheck<PluginSystemHealthCheck>("plugin_system_readiness", tags: new[] { "ready" });
 
 // Register core services
 builder.Services.AddSingleton<PluginManager>();
@@ -67,6 +71,41 @@ app.UseHttpsRedirection();
 
 app.UseStaticFiles();
 app.UseAntiforgery();
+app.Use(async (context, next) =>
+{
+    const string correlationIdHeader = "X-Correlation-ID";
+    var correlationId = context.Request.Headers[correlationIdHeader].FirstOrDefault();
+    if (string.IsNullOrWhiteSpace(correlationId))
+    {
+        correlationId = Guid.NewGuid().ToString("N");
+    }
+
+    context.Response.Headers[correlationIdHeader] = correlationId;
+    context.TraceIdentifier = correlationId;
+    await next();
+});
+
+app.MapHealthChecks("/health/live", new HealthCheckOptions
+{
+    Predicate = _ => false,
+    ResultStatusCodes =
+    {
+        [HealthStatus.Healthy] = StatusCodes.Status200OK,
+        [HealthStatus.Degraded] = StatusCodes.Status200OK,
+        [HealthStatus.Unhealthy] = StatusCodes.Status503ServiceUnavailable
+    }
+});
+
+app.MapHealthChecks("/health/ready", new HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("ready"),
+    ResultStatusCodes =
+    {
+        [HealthStatus.Healthy] = StatusCodes.Status200OK,
+        [HealthStatus.Degraded] = StatusCodes.Status200OK,
+        [HealthStatus.Unhealthy] = StatusCodes.Status503ServiceUnavailable
+    }
+});
 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
@@ -79,3 +118,5 @@ app.Lifetime.ApplicationStopping.Register(async () =>
 });
 
 app.Run();
+
+public partial class Program { }
