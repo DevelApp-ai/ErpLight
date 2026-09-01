@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using DevelApp.RuntimePluggableClassFactory.Interface;
 
 namespace ERP.SharedKernel.Contracts;
@@ -45,4 +46,11 @@ public interface IPluginModule : IPluginClass
     /// </summary>
     /// <returns>A task representing the shutdown operation.</returns>
     Task ShutdownAsync();
+
+    /// <summary>
+    /// Gets the health status of this plugin.
+    /// Returns Healthy if plugin is functioning correctly, otherwise returns Unhealthy with description.
+    /// </summary>
+    /// <returns>A task representing the health check operation.</returns>
+    Task<HealthStatus> CheckHealthAsync();
 }

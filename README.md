@@ -1,6 +1,6 @@
 # ErpLight - RuntimePluggableClassFactory 2.0.1 Demonstration
 
-ErpLight is a **comprehensive demonstration** of the [DevelApp.RuntimePluggableClassFactory 2.0.1](https://github.com/DevelApp-ai/RuntimePluggableClassFactory) NuGet package, showcasing dynamic plugin discovery and loading in enterprise applications. This modular ERP system demonstrates the **Modular Monolith** pattern with runtime plugin architecture.
+ErpLight is a **comprehensive demonstration** of the [DevelApp.RuntimePluggableClassFactory 2.0.1](https://github.com/DevelApp-ai/RuntimePluggableClassFactory) NuGet package, showcasing dynamic plugin discovery and loading in enterprise applications. This modular ERP system demonstrates the **Modular Monolith** pattern with runtime plugin architecture using **.NET 8.0**.
 
 ## 🚀 RuntimePluggableClassFactory Features Demonstrated
 

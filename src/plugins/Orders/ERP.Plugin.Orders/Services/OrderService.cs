@@ -1,4 +1,5 @@
 using ERP.Plugin.Orders.Events;
+using ERP.SharedKernel.Events;
 
 namespace ERP.Plugin.Orders.Services;
 
@@ -81,8 +82,14 @@ public class OrderInfo
 /// </summary>
 public class OrderService : IOrderService
 {
+    private readonly IEventPublisher _eventPublisher;
     private readonly Dictionary<Guid, OrderInfo> _orders = new();
     private int _orderCounter = 1;
+
+    public OrderService(IEventPublisher eventPublisher)
+    {
+        _eventPublisher = eventPublisher;
+    }
 
     public async Task<Guid> CreateOrderAsync(string orderType, string customerId, decimal totalAmount, List<OrderItem> items)
     {
@@ -105,10 +112,10 @@ public class OrderService : IOrderService
         _orders[orderId] = order;
 
         // Publish domain event
-        var evt = new OrderCreatedEvent(orderId, orderNumber, orderType, customerId, totalAmount, order.OrderDate, order.Status);
-        // Note: In a real implementation, you would publish this event through an event bus
-        
-        await Task.CompletedTask;
+        var orderCreatedEvent = new OrderCreatedEvent(orderId, orderNumber, orderType, customerId, totalAmount, order.OrderDate, order.Status);
+        await _eventPublisher.PublishAsync(orderCreatedEvent);
+
+        return orderId;
         return orderId;
     }
 
@@ -120,11 +127,9 @@ public class OrderService : IOrderService
             order.Status = newStatus;
 
             // Publish domain event
-            var evt = new OrderUpdatedEvent(orderId, order.OrderNumber, previousStatus, newStatus, updatedBy, reason);
-            // Note: In a real implementation, you would publish this event through an event bus
+            var orderUpdatedEvent = new OrderUpdatedEvent(orderId, order.OrderNumber, previousStatus, newStatus, updatedBy, reason);
+            await _eventPublisher.PublishAsync(orderUpdatedEvent);
         }
-
-        await Task.CompletedTask;
     }
 
     public async Task FulfillOrderAsync(Guid orderId, string fulfilledBy, string trackingNumber, string shippingMethod)
@@ -137,11 +142,9 @@ public class OrderService : IOrderService
             order.ShippingMethod = shippingMethod;
 
             // Publish domain event
-            var evt = new OrderFulfilledEvent(orderId, order.OrderNumber, fulfilledBy, trackingNumber, shippingMethod);
-            // Note: In a real implementation, you would publish this event through an event bus
+            var orderFulfilledEvent = new OrderFulfilledEvent(orderId, order.OrderNumber, fulfilledBy, trackingNumber, shippingMethod);
+            await _eventPublisher.PublishAsync(orderFulfilledEvent);
         }
-
-        await Task.CompletedTask;
     }
 
     public async Task CancelOrderAsync(Guid orderId, string cancellationReason, string cancelledBy, bool issueRefund)
@@ -153,11 +156,9 @@ public class OrderService : IOrderService
             order.CancellationReason = cancellationReason;
 
             // Publish domain event
-            var evt = new OrderCancelledEvent(orderId, order.OrderNumber, cancellationReason, cancelledBy, issueRefund);
-            // Note: In a real implementation, you would publish this event through an event bus
+            var orderCancelledEvent = new OrderCancelledEvent(orderId, order.OrderNumber, cancellationReason, cancelledBy, issueRefund);
+            await _eventPublisher.PublishAsync(orderCancelledEvent);
         }
-
-        await Task.CompletedTask;
     }
 
     public async Task<OrderInfo?> GetOrderAsync(Guid orderId)

@@ -23,7 +23,7 @@ public class EventPublisher : IEventPublisher
     /// <returns>A task representing the publishing operation.</returns>
     public async Task PublishAsync(DomainEvent domainEvent)
     {
-        _logger.LogDebug("Publishing event: {EventType} with ID {EventId}", domainEvent.EventType, domainEvent.EventId);
+        _logger.LogDebug("Publishing event: {EventType} with ID {EventId}, CorrelationID: {CorrelationId}", domainEvent.EventType, domainEvent.EventId, _correlationIdService.CurrentCorrelationId ?? "N/A");
 
         var eventType = domainEvent.GetType();
         var handlerType = typeof(IEventHandler<>).MakeGenericType(eventType);
@@ -70,7 +70,7 @@ public class EventPublisher : IEventPublisher
         }
         else
         {
-            _logger.LogDebug("No handlers found for event {EventType}", domainEvent.EventType);
+            _logger.LogDebug("No handlers found for event {EventType}, CorrelationID: {CorrelationId}", domainEvent.EventType, _correlationIdService.CurrentCorrelationId ?? "N/A");
         }
     }
 }

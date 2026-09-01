@@ -1,6 +1,7 @@
 using ERP.SharedKernel.Contracts;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using DevelApp.Utility.Model;
 using ERP.Plugin.Orders.Services;
 
@@ -43,6 +44,12 @@ public class OrdersModule : IPluginModule, INavigationProvider
     {
         // Perform any cleanup here
         await Task.CompletedTask;
+    }
+
+    public Task<HealthStatus> CheckHealthAsync()
+    {
+        // Orders module is healthy if it can be initialized
+        return Task.FromResult(HealthStatus.Healthy);
     }
 
     public IEnumerable<NavigationItem> GetNavigationItems()
