@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Configuration.Binder;
 using Microsoft.Extensions.Logging;
 
 namespace ERP.SharedKernel.Contracts;

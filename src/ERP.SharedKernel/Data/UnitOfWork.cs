@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using ERP.SharedKernel.Contracts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace ERP.SharedKernel.Data;
 
