@@ -1,0 +1,103 @@
+@page "/account/login"
+@using ERP.Host.Models.Auth
+@using ERP.Host.Services.Auth
+@inject AuthService AuthService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Login</PageTitle>
+
+<div class="row justify-content-center">
+    <div class="col-md-6 col-lg-4">
+        <div class="card shadow">
+            <div class="card-header">
+                <h3 class="card-title text-center">Login</h3>
+            </div>
+            <div class="card-body">
+                <EditForm Model="@loginRequest" OnValidSubmit="HandleLogin">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+
+                    <div class="mb-3">
+                        <label for="email" class="form-label">Email address</label>
+                        <InputText @bind-Value="loginRequest.Email" class="form-control" id="email" placeholder="Enter email" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="password" class="form-label">Password</label>
+                        <InputText @bind-Value="loginRequest.Password" type="password" class="form-control" id="password" placeholder="Password" />
+                    </div>
+
+                    <div class="mb-3 form-check">
+                        <InputCheckbox @bind-Value="loginRequest.RememberMe" class="form-check-input" id="rememberMe" />
+                        <label class="form-check-label" for="rememberMe">Remember me</label>
+                    </div>
+
+                    @if (errorMessage != null)
+                    {
+                        <div class="alert alert-danger">@errorMessage</div>
+                    }
+
+                    <button type="submit" class="btn btn-primary w-100" disabled="@isLoading">
+                        @if (isLoading)
+                        {
+                            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                            <span>Logging in...</span>
+                        }
+                        else
+                        {
+                            <span>Login</span>
+                        }
+                    </button>
+                </EditForm>
+
+                <hr />
+
+                <div class="text-center">
+                    <p>Don't have an account? <a href="/account/register">Register</a></p>
+                    <p><a href="/">Back to Home</a></p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private LoginRequest loginRequest = new();
+    private string? errorMessage;
+    private bool isLoading = false;
+
+    private async Task HandleLogin()
+    {
+        isLoading = true;
+        errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            var result = await AuthService.LoginAsync(loginRequest.Email, loginRequest.Password, loginRequest.RememberMe);
+
+            if (result.Success && result.Token != null)
+            {
+                // Store token in local storage (handled by auth middleware)
+                await localStorage.SetItemAsync("authToken", result.Token);
+                await localStorage.SetItemAsync("authTokenExpires", result.Expires?.ToString("o"));
+
+                // Redirect to home
+                NavigationManager.NavigateTo("/", true);
+            }
+            else
+            {
+                errorMessage = result.ErrorMessage ?? "Login failed";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "An error occurred during login";
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+}

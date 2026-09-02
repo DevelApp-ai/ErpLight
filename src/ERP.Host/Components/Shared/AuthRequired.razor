@@ -1,0 +1,19 @@
+@using ERP.Host.Services.Auth
+@inject AuthService AuthService
+@inject NavigationManager NavigationManager
+
+@if (!AuthService.IsAuthenticated)
+{
+    <div class="alert alert-warning">
+        <p>Authentication required. Please <a href="/account/login">login</a> to continue.</p>
+    </div>
+}
+else
+{
+    @ChildContent
+}
+
+@code {
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+}

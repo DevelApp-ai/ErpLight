@@ -10,6 +10,7 @@
   <!-- Primary demonstration: Use RuntimePluggableClassFactory from NuGet -->
   <ItemGroup>
     <PackageReference Include="DevelApp.RuntimePluggableClassFactory" Version="2.0.1" />
+    <PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" Version="2.3.12" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.0" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0" />
     <PackageReference Include="Microsoft.Extensions.Logging" Version="8.0.0" />
