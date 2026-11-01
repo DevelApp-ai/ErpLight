@@ -97,7 +97,7 @@ jobs:
         dotnet pack src/plugins/Orders/ERP.Plugin.Orders/ERP.Plugin.Orders.csproj --configuration Release --output ./packages
         
     - name: Upload NuGet packages
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: nuget-packages-${{ github.run_number }}
         path: ./packages/*.nupkg
