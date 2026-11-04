@@ -40,7 +40,6 @@ public class JwtAuthServiceTests : IDisposable
 
     public void Dispose()
     {
-        _httpContextAccessorMock?.Invoke();
     }
 
     [Fact]
@@ -138,9 +137,9 @@ public class JwtAuthServiceTests : IDisposable
     [Fact]
     public void IsAuthenticated_ShouldReturnFalse_WhenUserNotAuthenticated()
     {
-        // Arrange
+        // Arrange - an identity without an authentication type is not authenticated
         var httpContext = new DefaultHttpContext();
-        var identity = new ClaimsIdentity("TestAuth");
+        var identity = new ClaimsIdentity();
         var principal = new ClaimsPrincipal(identity);
         httpContext.User = principal;
         
@@ -162,7 +161,7 @@ public class JwtAuthServiceTests : IDisposable
         {
             new Claim(ClaimTypes.Name, "test-username")
         };
-        var identity = new ClaimsIdentity(claims, "TestAuth") { IsAuthenticated = true };
+        var identity = new ClaimsIdentity(claims, "TestAuth");
         var principal = new ClaimsPrincipal(identity);
         httpContext.User = principal;
         
@@ -348,14 +347,14 @@ public class JwtAuthServiceTests : IDisposable
         var tokenHandler = new JwtSecurityTokenHandler();
         var jwtToken = tokenHandler.ReadJwtToken(token);
 
-        // Assert
+        // Assert - JwtSecurityTokenHandler maps outbound claim types to their
+        // short JWT names (name, email, role), so read the serialized names
         Assert.Equal(userId, jwtToken.Subject);
-        Assert.Equal(userName, jwtToken.Claims.First(c => c.Type == ClaimTypes.Name).Value);
-        Assert.Equal(email, jwtToken.Claims.First(c => c.Type == ClaimTypes.Email).Value);
+        Assert.Equal(userName, jwtToken.Claims.First(c => c.Type == "unique_name").Value);
         Assert.Equal(email, jwtToken.Claims.First(c => c.Type == JwtRegisteredClaimNames.Email).Value);
         
         // Check roles
-        var roleClaims = jwtToken.Claims.Where(c => c.Type == ClaimTypes.Role).ToList();
+        var roleClaims = jwtToken.Claims.Where(c => c.Type == "role").ToList();
         Assert.Equal(2, roleClaims.Count);
         Assert.Contains("Admin", roleClaims.Select(c => c.Value));
         Assert.Contains("User", roleClaims.Select(c => c.Value));
@@ -495,6 +494,7 @@ public class JwtAuthServiceTests : IDisposable
                 new Claim(ClaimTypes.NameIdentifier, "1"),
                 new Claim(ClaimTypes.Name, "testuser")
             }),
+            NotBefore = DateTime.UtcNow.AddMinutes(-120),
             Expires = DateTime.UtcNow.AddMinutes(-60),
             SigningCredentials = new SigningCredentials(
                 new SymmetricSecurityKey(key),

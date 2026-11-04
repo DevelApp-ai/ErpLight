@@ -1,57 +1,46 @@
 using ERP.Host.Services.Observability;
+using System.Diagnostics;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using Moq;
-using OpenTelemetry;
-using OpenTelemetry.Metrics;
-using OpenTelemetry.Trace;
-using Xunit;
 
 namespace ERP.Host.Tests.Services.Observability;
 
 /// <summary>
 /// Unit tests for TelemetryService.
 /// </summary>
-public class TelemetryServiceTests : IDisposable
+public class TelemetryServiceTests
 {
-    private readonly Mock<IConfiguration> _configurationMock;
-    private readonly ILogger<TelemetryService> _logger;
-    private readonly TelemetryService _telemetryService;
-
-    public TelemetryServiceTests()
+    private static TelemetryService CreateTelemetryService(bool telemetryEnabled)
     {
-        _configurationMock = new Mock<IConfiguration>();
-        _logger = NullLogger<TelemetryService>.Instance;
-        _telemetryService = new TelemetryService(_configurationMock.Object, _logger);
-    }
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Telemetry:Enabled"] = telemetryEnabled ? "true" : "false",
+                ["Environment"] = "Development",
+            })
+            .Build();
 
-    public void Dispose()
-    {
-        _telemetryService.Dispose();
-        _configurationMock?.Invoke();
+        return new TelemetryService(configuration, NullLogger<TelemetryService>.Instance);
     }
 
     [Fact]
     public void Initialize_ShouldNotInitialize_WhenTelemetryDisabled()
     {
         // Arrange
-        var telemetrySectionMock = new Mock<IConfigurationSection>();
-        telemetrySectionMock.Setup(s => s.GetValue<bool>("Enabled")).Returns(false);
-        _configurationMock.Setup(c => c.GetSection("Telemetry")).Returns(telemetrySectionMock.Object);
+        var service = CreateTelemetryService(telemetryEnabled: false);
 
         // Act
-        _telemetryService.Initialize();
+        service.Initialize();
 
         // Assert - Should not throw and should not create providers
-        var meterProviderField = typeof(TelemetryService).GetField("_meterProvider", 
+        var meterProviderField = typeof(TelemetryService).GetField("_meterProvider",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        var tracerProviderField = typeof(TelemetryService).GetField("_tracerProvider", 
+        var tracerProviderField = typeof(TelemetryService).GetField("_tracerProvider",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        
-        var meterProvider = meterProviderField?.GetValue(_telemetryService);
-        var tracerProvider = tracerProviderField?.GetValue(_telemetryService);
-        
+
+        var meterProvider = meterProviderField?.GetValue(service);
+        var tracerProvider = tracerProviderField?.GetValue(service);
+
         Assert.Null(meterProvider);
         Assert.Null(tracerProvider);
     }
@@ -60,29 +49,20 @@ public class TelemetryServiceTests : IDisposable
     public void Initialize_ShouldInitialize_WhenTelemetryEnabled()
     {
         // Arrange
-        var telemetrySectionMock = new Mock<IConfigurationSection>();
-        telemetrySectionMock.Setup(s => s.GetValue<bool>("Enabled")).Returns(true);
-        telemetrySectionMock.Setup(s => s.GetValue<string>("Environment")).Returns("Development");
-        telemetrySectionMock.Setup(s => s.GetSection("Jaeger")).Returns(Mock.Of<IConfigurationSection>());
-        telemetrySectionMock.Setup(s => s.GetSection("Zipkin")).Returns(Mock.Of<IConfigurationSection>());
-        telemetrySectionMock.Setup(s => s.GetSection("Prometheus")).Returns(Mock.Of<IConfigurationSection>());
-        telemetrySectionMock.Setup(s => s.GetSection("OTLP")).Returns(Mock.Of<IConfigurationSection>());
-        
-        _configurationMock.Setup(c => c.GetSection("Telemetry")).Returns(telemetrySectionMock.Object);
-        _configurationMock.Setup(c => c.GetValue<string>("Environment")).Returns("Development");
+        var service = CreateTelemetryService(telemetryEnabled: true);
 
         // Act
-        _telemetryService.Initialize();
+        service.Initialize();
 
         // Assert - Providers should be created
-        var meterProviderField = typeof(TelemetryService).GetField("_meterProvider", 
+        var meterProviderField = typeof(TelemetryService).GetField("_meterProvider",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        var tracerProviderField = typeof(TelemetryService).GetField("_tracerProvider", 
+        var tracerProviderField = typeof(TelemetryService).GetField("_tracerProvider",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        
-        var meterProvider = meterProviderField?.GetValue(_telemetryService);
-        var tracerProvider = tracerProviderField?.GetValue(_telemetryService);
-        
+
+        var meterProvider = meterProviderField?.GetValue(service);
+        var tracerProvider = tracerProviderField?.GetValue(service);
+
         Assert.NotNull(meterProvider);
         Assert.NotNull(tracerProvider);
     }
@@ -90,8 +70,11 @@ public class TelemetryServiceTests : IDisposable
     [Fact]
     public void StartActivity_ShouldReturnNull_WhenNotInitialized()
     {
+        // Arrange
+        var service = CreateTelemetryService(telemetryEnabled: false);
+
         // Act
-        var activity = _telemetryService.StartActivity("TestActivity");
+        var activity = service.StartActivity("TestActivity");
 
         // Assert
         Assert.Null(activity);
@@ -101,46 +84,26 @@ public class TelemetryServiceTests : IDisposable
     public void StartActivity_ShouldReturnActivity_WhenInitialized()
     {
         // Arrange
-        var telemetrySectionMock = new Mock<IConfigurationSection>();
-        telemetrySectionMock.Setup(s => s.GetValue<bool>("Enabled")).Returns(true);
-        telemetrySectionMock.Setup(s => s.GetValue<string>("Environment")).Returns("Development");
-        telemetrySectionMock.Setup(s => s.GetSection("Jaeger")).Returns(Mock.Of<IConfigurationSection>());
-        telemetrySectionMock.Setup(s => s.GetSection("Zipkin")).Returns(Mock.Of<IConfigurationSection>());
-        telemetrySectionMock.Setup(s => s.GetSection("Prometheus")).Returns(Mock.Of<IConfigurationSection>());
-        telemetrySectionMock.Setup(s => s.GetSection("OTLP")).Returns(Mock.Of<IConfigurationSection>());
-        
-        _configurationMock.Setup(c => c.GetSection("Telemetry")).Returns(telemetrySectionMock.Object);
-        _configurationMock.Setup(c => c.GetValue<string>("Environment")).Returns("Development");
-        
-        _telemetryService.Initialize();
+        var service = CreateTelemetryService(telemetryEnabled: true);
+        service.Initialize();
 
         // Act
-        var activity = _telemetryService.StartActivity("TestActivity");
+        var activity = service.StartActivity("TestActivity");
 
         // Assert
         Assert.NotNull(activity);
-        Assert.Equal("TestActivity", activity.Name);
+        Assert.Equal("TestActivity", activity.DisplayName);
     }
 
     [Fact]
     public void StartActivity_ShouldSetCorrectActivityKind()
     {
         // Arrange
-        var telemetrySectionMock = new Mock<IConfigurationSection>();
-        telemetrySectionMock.Setup(s => s.GetValue<bool>("Enabled")).Returns(true);
-        telemetrySectionMock.Setup(s => s.GetValue<string>("Environment")).Returns("Development");
-        telemetrySectionMock.Setup(s => s.GetSection("Jaeger")).Returns(Mock.Of<IConfigurationSection>());
-        telemetrySectionMock.Setup(s => s.GetSection("Zipkin")).Returns(Mock.Of<IConfigurationSection>());
-        telemetrySectionMock.Setup(s => s.GetSection("Prometheus")).Returns(Mock.Of<IConfigurationSection>());
-        telemetrySectionMock.Setup(s => s.GetSection("OTLP")).Returns(Mock.Of<IConfigurationSection>());
-        
-        _configurationMock.Setup(c => c.GetSection("Telemetry")).Returns(telemetrySectionMock.Object);
-        _configurationMock.Setup(c => c.GetValue<string>("Environment")).Returns("Development");
-        
-        _telemetryService.Initialize();
+        var service = CreateTelemetryService(telemetryEnabled: true);
+        service.Initialize();
 
         // Act
-        var activity = _telemetryService.StartActivity("TestActivity", ActivityKind.Server);
+        var activity = service.StartActivity("TestActivity", ActivityKind.Server);
 
         // Assert
         Assert.NotNull(activity);
@@ -151,23 +114,13 @@ public class TelemetryServiceTests : IDisposable
     public async Task ExecuteWithTracingAsync_ShouldExecuteAction()
     {
         // Arrange
-        var telemetrySectionMock = new Mock<IConfigurationSection>();
-        telemetrySectionMock.Setup(s => s.GetValue<bool>("Enabled")).Returns(true);
-        telemetrySectionMock.Setup(s => s.GetValue<string>("Environment")).Returns("Development");
-        telemetrySectionMock.Setup(s => s.GetSection("Jaeger")).Returns(Mock.Of<IConfigurationSection>());
-        telemetrySectionMock.Setup(s => s.GetSection("Zipkin")).Returns(Mock.Of<IConfigurationSection>());
-        telemetrySectionMock.Setup(s => s.GetSection("Prometheus")).Returns(Mock.Of<IConfigurationSection>());
-        telemetrySectionMock.Setup(s => s.GetSection("OTLP")).Returns(Mock.Of<IConfigurationSection>());
-        
-        _configurationMock.Setup(c => c.GetSection("Telemetry")).Returns(telemetrySectionMock.Object);
-        _configurationMock.Setup(c => c.GetValue<string>("Environment")).Returns("Development");
-        
-        _telemetryService.Initialize();
+        var service = CreateTelemetryService(telemetryEnabled: true);
+        service.Initialize();
 
         var executed = false;
 
         // Act
-        await _telemetryService.ExecuteWithTracingAsync("TestOperation", async () =>
+        await service.ExecuteWithTracingAsync("TestOperation", async () =>
         {
             executed = true;
         });
@@ -180,21 +133,11 @@ public class TelemetryServiceTests : IDisposable
     public async Task ExecuteWithTracingAsync_ShouldReturnResult()
     {
         // Arrange
-        var telemetrySectionMock = new Mock<IConfigurationSection>();
-        telemetrySectionMock.Setup(s => s.GetValue<bool>("Enabled")).Returns(true);
-        telemetrySectionMock.Setup(s => s.GetValue<string>("Environment")).Returns("Development");
-        telemetrySectionMock.Setup(s => s.GetSection("Jaeger")).Returns(Mock.Of<IConfigurationSection>());
-        telemetrySectionMock.Setup(s => s.GetSection("Zipkin")).Returns(Mock.Of<IConfigurationSection>());
-        telemetrySectionMock.Setup(s => s.GetSection("Prometheus")).Returns(Mock.Of<IConfigurationSection>());
-        telemetrySectionMock.Setup(s => s.GetSection("OTLP")).Returns(Mock.Of<IConfigurationSection>());
-        
-        _configurationMock.Setup(c => c.GetSection("Telemetry")).Returns(telemetrySectionMock.Object);
-        _configurationMock.Setup(c => c.GetValue<string>("Environment")).Returns("Development");
-        
-        _telemetryService.Initialize();
+        var service = CreateTelemetryService(telemetryEnabled: true);
+        service.Initialize();
 
         // Act
-        var result = await _telemetryService.ExecuteWithTracingAsync("TestOperation", async () =>
+        var result = await service.ExecuteWithTracingAsync("TestOperation", async () =>
         {
             return "TestResult";
         });
@@ -207,21 +150,11 @@ public class TelemetryServiceTests : IDisposable
     public async Task ExecuteWithTracingAsync_ShouldThrowOnException()
     {
         // Arrange
-        var telemetrySectionMock = new Mock<IConfigurationSection>();
-        telemetrySectionMock.Setup(s => s.GetValue<bool>("Enabled")).Returns(true);
-        telemetrySectionMock.Setup(s => s.GetValue<string>("Environment")).Returns("Development");
-        telemetrySectionMock.Setup(s => s.GetSection("Jaeger")).Returns(Mock.Of<IConfigurationSection>());
-        telemetrySectionMock.Setup(s => s.GetSection("Zipkin")).Returns(Mock.Of<IConfigurationSection>());
-        telemetrySectionMock.Setup(s => s.GetSection("Prometheus")).Returns(Mock.Of<IConfigurationSection>());
-        telemetrySectionMock.Setup(s => s.GetSection("OTLP")).Returns(Mock.Of<IConfigurationSection>());
-        
-        _configurationMock.Setup(c => c.GetSection("Telemetry")).Returns(telemetrySectionMock.Object);
-        _configurationMock.Setup(c => c.GetValue<string>("Environment")).Returns("Development");
-        
-        _telemetryService.Initialize();
+        var service = CreateTelemetryService(telemetryEnabled: true);
+        service.Initialize();
 
         // Act & Assert
-        await Assert.ThrowsAsync<Exception>(() => _telemetryService.ExecuteWithTracingAsync("TestOperation", async () =>
+        await Assert.ThrowsAsync<Exception>(() => service.ExecuteWithTracingAsync("TestOperation", async () =>
         {
             throw new Exception("Test exception");
         }));
@@ -230,8 +163,11 @@ public class TelemetryServiceTests : IDisposable
     [Fact]
     public void GetMeter_ShouldReturnNull_WhenNotInitialized()
     {
+        // Arrange
+        var service = CreateTelemetryService(telemetryEnabled: false);
+
         // Act
-        var meter = _telemetryService.GetMeter("TestMeter");
+        var meter = service.GetMeter("TestMeter");
 
         // Assert
         Assert.Null(meter);
@@ -241,21 +177,11 @@ public class TelemetryServiceTests : IDisposable
     public void GetMeter_ShouldReturnMeter_WhenInitialized()
     {
         // Arrange
-        var telemetrySectionMock = new Mock<IConfigurationSection>();
-        telemetrySectionMock.Setup(s => s.GetValue<bool>("Enabled")).Returns(true);
-        telemetrySectionMock.Setup(s => s.GetValue<string>("Environment")).Returns("Development");
-        telemetrySectionMock.Setup(s => s.GetSection("Jaeger")).Returns(Mock.Of<IConfigurationSection>());
-        telemetrySectionMock.Setup(s => s.GetSection("Zipkin")).Returns(Mock.Of<IConfigurationSection>());
-        telemetrySectionMock.Setup(s => s.GetSection("Prometheus")).Returns(Mock.Of<IConfigurationSection>());
-        telemetrySectionMock.Setup(s => s.GetSection("OTLP")).Returns(Mock.Of<IConfigurationSection>());
-        
-        _configurationMock.Setup(c => c.GetSection("Telemetry")).Returns(telemetrySectionMock.Object);
-        _configurationMock.Setup(c => c.GetValue<string>("Environment")).Returns("Development");
-        
-        _telemetryService.Initialize();
+        var service = CreateTelemetryService(telemetryEnabled: true);
+        service.Initialize();
 
         // Act
-        var meter = _telemetryService.GetMeter("TestMeter");
+        var meter = service.GetMeter("TestMeter");
 
         // Assert
         Assert.NotNull(meter);
@@ -264,8 +190,11 @@ public class TelemetryServiceTests : IDisposable
     [Fact]
     public void CreateCounter_ShouldReturnNull_WhenNotInitialized()
     {
+        // Arrange
+        var service = CreateTelemetryService(telemetryEnabled: false);
+
         // Act
-        var counter = _telemetryService.CreateCounter("TestMeter", "TestCounter", "Test description");
+        var counter = service.CreateCounter("TestMeter", "TestCounter", "Test description");
 
         // Assert
         Assert.Null(counter);
@@ -275,21 +204,11 @@ public class TelemetryServiceTests : IDisposable
     public void CreateCounter_ShouldReturnCounter_WhenInitialized()
     {
         // Arrange
-        var telemetrySectionMock = new Mock<IConfigurationSection>();
-        telemetrySectionMock.Setup(s => s.GetValue<bool>("Enabled")).Returns(true);
-        telemetrySectionMock.Setup(s => s.GetValue<string>("Environment")).Returns("Development");
-        telemetrySectionMock.Setup(s => s.GetSection("Jaeger")).Returns(Mock.Of<IConfigurationSection>());
-        telemetrySectionMock.Setup(s => s.GetSection("Zipkin")).Returns(Mock.Of<IConfigurationSection>());
-        telemetrySectionMock.Setup(s => s.GetSection("Prometheus")).Returns(Mock.Of<IConfigurationSection>());
-        telemetrySectionMock.Setup(s => s.GetSection("OTLP")).Returns(Mock.Of<IConfigurationSection>());
-        
-        _configurationMock.Setup(c => c.GetSection("Telemetry")).Returns(telemetrySectionMock.Object);
-        _configurationMock.Setup(c => c.GetValue<string>("Environment")).Returns("Development");
-        
-        _telemetryService.Initialize();
+        var service = CreateTelemetryService(telemetryEnabled: true);
+        service.Initialize();
 
         // Act
-        var counter = _telemetryService.CreateCounter("TestMeter", "TestCounter", "Test description");
+        var counter = service.CreateCounter("TestMeter", "TestCounter", "Test description");
 
         // Assert
         Assert.NotNull(counter);
@@ -298,8 +217,11 @@ public class TelemetryServiceTests : IDisposable
     [Fact]
     public void CreateHistogram_ShouldReturnNull_WhenNotInitialized()
     {
+        // Arrange
+        var service = CreateTelemetryService(telemetryEnabled: false);
+
         // Act
-        var histogram = _telemetryService.CreateHistogram("TestMeter", "TestHistogram", "Test description");
+        var histogram = service.CreateHistogram("TestMeter", "TestHistogram", "Test description");
 
         // Assert
         Assert.Null(histogram);
@@ -309,21 +231,11 @@ public class TelemetryServiceTests : IDisposable
     public void CreateHistogram_ShouldReturnHistogram_WhenInitialized()
     {
         // Arrange
-        var telemetrySectionMock = new Mock<IConfigurationSection>();
-        telemetrySectionMock.Setup(s => s.GetValue<bool>("Enabled")).Returns(true);
-        telemetrySectionMock.Setup(s => s.GetValue<string>("Environment")).Returns("Development");
-        telemetrySectionMock.Setup(s => s.GetSection("Jaeger")).Returns(Mock.Of<IConfigurationSection>());
-        telemetrySectionMock.Setup(s => s.GetSection("Zipkin")).Returns(Mock.Of<IConfigurationSection>());
-        telemetrySectionMock.Setup(s => s.GetSection("Prometheus")).Returns(Mock.Of<IConfigurationSection>());
-        telemetrySectionMock.Setup(s => s.GetSection("OTLP")).Returns(Mock.Of<IConfigurationSection>());
-        
-        _configurationMock.Setup(c => c.GetSection("Telemetry")).Returns(telemetrySectionMock.Object);
-        _configurationMock.Setup(c => c.GetValue<string>("Environment")).Returns("Development");
-        
-        _telemetryService.Initialize();
+        var service = CreateTelemetryService(telemetryEnabled: true);
+        service.Initialize();
 
         // Act
-        var histogram = _telemetryService.CreateHistogram("TestMeter", "TestHistogram", "Test description");
+        var histogram = service.CreateHistogram("TestMeter", "TestHistogram", "Test description");
 
         // Assert
         Assert.NotNull(histogram);
@@ -333,10 +245,11 @@ public class TelemetryServiceTests : IDisposable
     public void CreateGauge_ShouldNotThrow_WhenNotInitialized()
     {
         // Arrange
+        var service = CreateTelemetryService(telemetryEnabled: false);
         int value = 42;
 
         // Act - Should not throw
-        _telemetryService.CreateGauge("TestMeter", "TestGauge", "Test description", () => value);
+        service.CreateGauge("TestMeter", "TestGauge", "Test description", () => value);
 
         // Assert - No assertion needed, just checking it doesn't throw
     }
@@ -345,23 +258,13 @@ public class TelemetryServiceTests : IDisposable
     public void CreateGauge_ShouldNotThrow_WhenInitialized()
     {
         // Arrange
-        var telemetrySectionMock = new Mock<IConfigurationSection>();
-        telemetrySectionMock.Setup(s => s.GetValue<bool>("Enabled")).Returns(true);
-        telemetrySectionMock.Setup(s => s.GetValue<string>("Environment")).Returns("Development");
-        telemetrySectionMock.Setup(s => s.GetSection("Jaeger")).Returns(Mock.Of<IConfigurationSection>());
-        telemetrySectionMock.Setup(s => s.GetSection("Zipkin")).Returns(Mock.Of<IConfigurationSection>());
-        telemetrySectionMock.Setup(s => s.GetSection("Prometheus")).Returns(Mock.Of<IConfigurationSection>());
-        telemetrySectionMock.Setup(s => s.GetSection("OTLP")).Returns(Mock.Of<IConfigurationSection>());
-        
-        _configurationMock.Setup(c => c.GetSection("Telemetry")).Returns(telemetrySectionMock.Object);
-        _configurationMock.Setup(c => c.GetValue<string>("Environment")).Returns("Development");
-        
-        _telemetryService.Initialize();
+        var service = CreateTelemetryService(telemetryEnabled: true);
+        service.Initialize();
 
         int value = 42;
 
         // Act - Should not throw
-        _telemetryService.CreateGauge("TestMeter", "TestGauge", "Test description", () => value);
+        service.CreateGauge("TestMeter", "TestGauge", "Test description", () => value);
 
         // Assert - No assertion needed, just checking it doesn't throw
     }
@@ -370,53 +273,25 @@ public class TelemetryServiceTests : IDisposable
     public void Dispose_ShouldDisposeProviders()
     {
         // Arrange
-        var telemetrySectionMock = new Mock<IConfigurationSection>();
-        telemetrySectionMock.Setup(s => s.GetValue<bool>("Enabled")).Returns(true);
-        telemetrySectionMock.Setup(s => s.GetValue<string>("Environment")).Returns("Development");
-        telemetrySectionMock.Setup(s => s.GetSection("Jaeger")).Returns(Mock.Of<IConfigurationSection>());
-        telemetrySectionMock.Setup(s => s.GetSection("Zipkin")).Returns(Mock.Of<IConfigurationSection>());
-        telemetrySectionMock.Setup(s => s.GetSection("Prometheus")).Returns(Mock.Of<IConfigurationSection>());
-        telemetrySectionMock.Setup(s => s.GetSection("OTLP")).Returns(Mock.Of<IConfigurationSection>());
-        
-        _configurationMock.Setup(c => c.GetSection("Telemetry")).Returns(telemetrySectionMock.Object);
-        _configurationMock.Setup(c => c.GetValue<string>("Environment")).Returns("Development");
-        
-        _telemetryService.Initialize();
+        var service = CreateTelemetryService(telemetryEnabled: true);
+        service.Initialize();
 
         // Act
-        _telemetryService.Dispose();
+        service.Dispose();
 
-        // Assert - Should not throw
-        // Providers should be disposed
-        var meterProviderField = typeof(TelemetryService).GetField("_meterProvider", 
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        var tracerProviderField = typeof(TelemetryService).GetField("_tracerProvider", 
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        
-        // After dispose, providers should be null or disposed
-        // We can't easily check if they're disposed, but we can verify the method doesn't throw
+        // Assert - Should not throw; providers are disposed by the service
     }
 
     [Fact]
     public void Dispose_ShouldBeIdempotent()
     {
         // Arrange
-        var telemetrySectionMock = new Mock<IConfigurationSection>();
-        telemetrySectionMock.Setup(s => s.GetValue<bool>("Enabled")).Returns(true);
-        telemetrySectionMock.Setup(s => s.GetValue<string>("Environment")).Returns("Development");
-        telemetrySectionMock.Setup(s => s.GetSection("Jaeger")).Returns(Mock.Of<IConfigurationSection>());
-        telemetrySectionMock.Setup(s => s.GetSection("Zipkin")).Returns(Mock.Of<IConfigurationSection>());
-        telemetrySectionMock.Setup(s => s.GetSection("Prometheus")).Returns(Mock.Of<IConfigurationSection>());
-        telemetrySectionMock.Setup(s => s.GetSection("OTLP")).Returns(Mock.Of<IConfigurationSection>());
-        
-        _configurationMock.Setup(c => c.GetSection("Telemetry")).Returns(telemetrySectionMock.Object);
-        _configurationMock.Setup(c => c.GetValue<string>("Environment")).Returns("Development");
-        
-        _telemetryService.Initialize();
+        var service = CreateTelemetryService(telemetryEnabled: true);
+        service.Initialize();
 
         // Act - Should not throw when called multiple times
-        _telemetryService.Dispose();
-        _telemetryService.Dispose();
+        service.Dispose();
+        service.Dispose();
 
         // Assert - No assertion needed, just checking it doesn't throw
     }

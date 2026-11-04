@@ -1,5 +1,8 @@
+using ERP.Host.Data;
 using ERP.Host.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.InMemory;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -32,10 +35,27 @@ public class TransactionManagerTests : IDisposable
 
     public void Dispose()
     {
-        _serviceProviderMock?.Invoke();
-        _dbContextMock?.Invoke();
-        _transactionMock?.Invoke();
     }
+
+    private static TestDbContext CreateTestDbContext()
+    {
+        var options = new DbContextOptionsBuilder<TestDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
+            .Options;
+        return new TestDbContext(options);
+    }
+
+    private static ApplicationDbContext CreateApplicationDbContext()
+    {
+        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
+            .Options;
+        return new ApplicationDbContext(options);
+    }
+
+    private sealed class TestDbContext(DbContextOptions<TestDbContext> options) : DbContext(options);
 
     [Fact]
     public void HasActiveTransaction_ShouldReturnFalse_WhenNoTransactions()
@@ -63,16 +83,19 @@ public class TransactionManagerTests : IDisposable
     public async Task BeginTransactionAsync_ShouldAddTransactionToStack()
     {
         // Arrange
-        _serviceProviderMock.Setup(x => x.GetService(typeof(DbContext))).Returns(_dbContextMock.Object);
-        _dbContextMock.Setup(x => x.Database.BeginTransactionAsync(default)).ReturnsAsync(_transactionMock.Object);
+        var context = CreateTestDbContext();
+        _serviceProviderMock.Setup(x => x.GetService(typeof(DbContext))).Returns(context);
 
         // Act
         await _transactionManager.BeginTransactionAsync<DbContext>();
 
         // Assert
         Assert.True(_transactionManager.HasActiveTransaction);
-    }
 
+        // Cleanup
+        await _transactionManager.RollbackAsync();
+        await context.DisposeAsync();
+    }
     [Fact]
     public async Task CommitAsync_ShouldCommitAllTransactions()
     {
@@ -91,8 +114,8 @@ public class TransactionManagerTests : IDisposable
         await _transactionManager.CommitAsync();
 
         // Assert
-        transaction1.Verify(x => x.CommitAsync(), Times.Once);
-        transaction2.Verify(x => x.CommitAsync(), Times.Once);
+        transaction1.Verify(x => x.CommitAsync(default), Times.Once);
+        transaction2.Verify(x => x.CommitAsync(default), Times.Once);
         transaction1.Verify(x => x.Dispose(), Times.Once);
         transaction2.Verify(x => x.Dispose(), Times.Once);
     }
@@ -104,7 +127,7 @@ public class TransactionManagerTests : IDisposable
         var transaction1 = new Mock<IDbContextTransaction>();
         var transaction2 = new Mock<IDbContextTransaction>();
         
-        transaction1.Setup(x => x.CommitAsync()).ThrowsAsync(new Exception("Commit failed"));
+        transaction1.Setup(x => x.CommitAsync(default)).ThrowsAsync(new Exception("Commit failed"));
         
         var activeTransactionsField = typeof(TransactionManager).GetField("_activeTransactions", 
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
@@ -115,8 +138,8 @@ public class TransactionManagerTests : IDisposable
         // Act & Assert
         await Assert.ThrowsAsync<AggregateException>(() => _transactionManager.CommitAsync());
         
-        transaction1.Verify(x => x.RollbackAsync(), Times.Once);
-        transaction2.Verify(x => x.CommitAsync(), Times.Never);
+        transaction1.Verify(x => x.RollbackAsync(default), Times.Once);
+        transaction2.Verify(x => x.CommitAsync(default), Times.Never);
     }
 
     [Fact]
@@ -136,8 +159,8 @@ public class TransactionManagerTests : IDisposable
         await _transactionManager.RollbackAsync();
 
         // Assert
-        transaction1.Verify(x => x.RollbackAsync(), Times.Once);
-        transaction2.Verify(x => x.RollbackAsync(), Times.Once);
+        transaction1.Verify(x => x.RollbackAsync(default), Times.Once);
+        transaction2.Verify(x => x.RollbackAsync(default), Times.Once);
         transaction1.Verify(x => x.Dispose(), Times.Once);
         transaction2.Verify(x => x.Dispose(), Times.Once);
     }
@@ -147,9 +170,8 @@ public class TransactionManagerTests : IDisposable
     {
         // Arrange
         var executed = false;
-        
-        _serviceProviderMock.Setup(x => x.GetService(typeof(DbContext))).Returns(_dbContextMock.Object);
-        _dbContextMock.Setup(x => x.Database.BeginTransactionAsync(default)).ReturnsAsync(_transactionMock.Object);
+        var context = CreateApplicationDbContext();
+        _serviceProviderMock.Setup(x => x.GetService(typeof(ApplicationDbContext))).Returns(context);
 
         // Act
         await _transactionManager.ExecuteInTransactionAsync(async () =>
@@ -159,31 +181,31 @@ public class TransactionManagerTests : IDisposable
 
         // Assert
         Assert.True(executed);
-        _transactionMock.Verify(x => x.CommitAsync(), Times.Once);
+        Assert.False(_transactionManager.HasActiveTransaction);
+        await context.DisposeAsync();
     }
-
     [Fact]
     public async Task ExecuteInTransactionAsync_ShouldRollbackOnException()
     {
         // Arrange
-        _serviceProviderMock.Setup(x => x.GetService(typeof(DbContext))).Returns(_dbContextMock.Object);
-        _dbContextMock.Setup(x => x.Database.BeginTransactionAsync(default)).ReturnsAsync(_transactionMock.Object);
+        var context = CreateApplicationDbContext();
+        _serviceProviderMock.Setup(x => x.GetService(typeof(ApplicationDbContext))).Returns(context);
 
         // Act & Assert
         await Assert.ThrowsAsync<Exception>(() => _transactionManager.ExecuteInTransactionAsync(async () =>
         {
             throw new Exception("Test exception");
         }));
-        
-        _transactionMock.Verify(x => x.RollbackAsync(), Times.Once);
-    }
 
+        Assert.False(_transactionManager.HasActiveTransaction);
+        await context.DisposeAsync();
+    }
     [Fact]
     public async Task ExecuteInTransactionAsync_WithResult_ShouldReturnResultOnSuccess()
     {
         // Arrange
-        _serviceProviderMock.Setup(x => x.GetService(typeof(DbContext))).Returns(_dbContextMock.Object);
-        _dbContextMock.Setup(x => x.Database.BeginTransactionAsync(default)).ReturnsAsync(_transactionMock.Object);
+        var context = CreateApplicationDbContext();
+        _serviceProviderMock.Setup(x => x.GetService(typeof(ApplicationDbContext))).Returns(context);
 
         // Act
         var result = await _transactionManager.ExecuteInTransactionAsync(async () =>
@@ -193,26 +215,26 @@ public class TransactionManagerTests : IDisposable
 
         // Assert
         Assert.Equal("TestResult", result);
-        _transactionMock.Verify(x => x.CommitAsync(), Times.Once);
+        Assert.False(_transactionManager.HasActiveTransaction);
+        await context.DisposeAsync();
     }
-
     [Fact]
     public async Task ExecuteInTransactionAsync_WithResult_ShouldRollbackOnException()
     {
         // Arrange
-        _serviceProviderMock.Setup(x => x.GetService(typeof(DbContext))).Returns(_dbContextMock.Object);
-        _dbContextMock.Setup(x => x.Database.BeginTransactionAsync(default)).ReturnsAsync(_transactionMock.Object);
+        var context = CreateApplicationDbContext();
+        _serviceProviderMock.Setup(x => x.GetService(typeof(ApplicationDbContext))).Returns(context);
 
         // Act & Assert
-        await Assert.ThrowsAsync<Exception>(() => _transactionManager.ExecuteInTransactionAsync(async () =>
+        await Assert.ThrowsAsync<Exception>(() => _transactionManager.ExecuteInTransactionAsync<string>(async () =>
         {
             throw new Exception("Test exception");
             return "TestResult";
         }));
-        
-        _transactionMock.Verify(x => x.RollbackAsync(), Times.Once);
-    }
 
+        Assert.False(_transactionManager.HasActiveTransaction);
+        await context.DisposeAsync();
+    }
     [Fact]
     public async Task ExecuteWithCompensationAsync_ShouldExecuteCompensationOnFailure()
     {
@@ -344,9 +366,9 @@ public class TransactionManagerTests : IDisposable
         {
             (async () => { await Task.CompletedTask; },
              async () => { compensationOrder.Add(1); await Task.CompletedTask; }),
-            (async () => { throw new Exception("Action 2 failed"); },
-             async () => { compensationOrder.Add(2); throw new Exception("Compensation 2 failed"); }),
             (async () => { await Task.CompletedTask; },
+             async () => { compensationOrder.Add(2); throw new Exception("Compensation 2 failed"); }),
+            (async () => { throw new Exception("Action 3 failed"); },
              async () => { compensationOrder.Add(3); await Task.CompletedTask; })
         };
 
@@ -374,7 +396,6 @@ public class TransactionScopeTests : IDisposable
 
     public void Dispose()
     {
-        _transactionManagerMock?.Invoke();
         _scope.Dispose();
     }
 

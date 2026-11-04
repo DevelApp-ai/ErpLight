@@ -15,7 +15,7 @@ public class EventPublisherTests
         services.AddScoped<IEventHandler<TestDomainEvent>, RecordingHandler>();
         services.AddSingleton<EventRecorder>();
         var provider = services.BuildServiceProvider();
-        var publisher = new EventPublisher(provider, NullLogger<EventPublisher>.Instance);
+        var publisher = new EventPublisher(provider, NullLogger<EventPublisher>.Instance, Mock.Of<ICorrelationIdService>());
 
         await publisher.PublishAsync(new TestDomainEvent());
 

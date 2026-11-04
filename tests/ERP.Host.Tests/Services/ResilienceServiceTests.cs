@@ -3,6 +3,9 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Polly;
+using Polly.CircuitBreaker;
+using Polly.Retry;
+using Polly.Timeout;
 using Xunit;
 
 namespace ERP.Host.Tests.Services;
@@ -203,7 +206,7 @@ public class ResilienceServiceTests : IDisposable
 
         // Assert
         Assert.NotNull(policy);
-        Assert.IsType<AsyncPolicy>(policy);
+        Assert.IsAssignableFrom<AsyncPolicy>(policy);
     }
 
     [Fact]
@@ -214,7 +217,7 @@ public class ResilienceServiceTests : IDisposable
 
         // Assert
         Assert.NotNull(policy);
-        Assert.IsType<AsyncPolicy>(policy);
+        Assert.IsAssignableFrom<AsyncPolicy>(policy);
     }
 
     [Fact]
@@ -259,7 +262,7 @@ public class ResilienceServiceTests : IDisposable
         var attemptCount = 0;
 
         // Act & Assert
-        await Assert.ThrowsAsync<Exception>(() => _resilienceService.ExecuteWithRetryAsync(async () =>
+        await Assert.ThrowsAsync<Exception>(() => _resilienceService.ExecuteWithRetryAsync<object>(async () =>
         {
             attemptCount++;
             throw new Exception("Test exception");
@@ -290,22 +293,23 @@ public class ResilienceServiceTests : IDisposable
         // Act - Execute until circuit breaks
         for (int i = 0; i < 5; i++)
         {
-            await Assert.ThrowsAnyAsync<Exception>(() => _resilienceService.ExecuteWithCircuitBreakerAsync(async () =>
+            await Assert.ThrowsAnyAsync<Exception>(() => _resilienceService.ExecuteWithCircuitBreakerAsync<object>(async () =>
             {
                 attemptCount++;
                 throw new Exception("Test exception");
             }, exceptionsAllowedBeforeBreaking: 3, breakDurationMs: 1000));
         }
 
-        // After 5 attempts, circuit should be broken
+        // After the allowed failures, circuit should be broken
         await Assert.ThrowsAsync<BrokenCircuitException>(() => _resilienceService.ExecuteWithCircuitBreakerAsync(async () =>
         {
             attemptCount++;
             return "Should not reach here";
         }, exceptionsAllowedBeforeBreaking: 3, breakDurationMs: 1000));
 
-        // attemptCount should be 5
-        Assert.Equal(5, attemptCount);
+        // attemptCount should be 3: calls 4, 5 and the last call failed fast with
+        // BrokenCircuitException without executing the action
+        Assert.Equal(3, attemptCount);
     }
 
     [Fact]
