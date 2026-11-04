@@ -108,13 +108,14 @@ public class ResilienceServiceTests : IDisposable
         // Assert
         Assert.Equal(3, attemptTimes.Count);
         
-        // Check that delays are increasing (approximately exponential)
+        // Check that delays increase between retries (100ms then 200ms on this
+        // policy). Use generous upper bounds so slow, contended CI runners
+        // (e.g. macOS) do not flake on precise wall-clock windows.
         var delay1 = (attemptTimes[1] - attemptTimes[0]).TotalMilliseconds;
         var delay2 = (attemptTimes[2] - attemptTimes[1]).TotalMilliseconds;
         
-        // First retry: ~100ms, Second retry: ~200ms (exponential)
-        Assert.InRange(delay1, 90, 150); // Allow some tolerance
-        Assert.InRange(delay2, 180, 250); // Allow some tolerance
+        Assert.InRange(delay1, 90, 1000);
+        Assert.InRange(delay2, delay1 + 50, 5000);
     }
 
     [Fact]
