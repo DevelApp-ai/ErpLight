@@ -39,7 +39,7 @@ public class PluginManager
     /// <summary>
     /// Gets all currently loaded plugin modules.
     /// </summary>
-    public IReadOnlyList<IPluginModule> LoadedPlugins => _loadedPlugins.AsReadOnly();
+    public virtual IReadOnlyList<IPluginModule> LoadedPlugins => _loadedPlugins.AsReadOnly();
 
     /// <summary>
     /// Discovers and loads all plugins from the plugins directory using RuntimePluggableClassFactory.

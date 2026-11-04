@@ -3,6 +3,7 @@ using ERP.Host.Data;
 using ERP.Host.Models.Auth;
 using ERP.Host.Services;
 using ERP.Host.Services.Auth;
+using ERP.SharedKernel.Contracts.Auth;
 using ERP.SharedKernel.Events;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
@@ -86,7 +87,7 @@ builder.Services.AddScoped<IAuthService>(sp => sp.GetRequiredService<AuthService
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
 {
     var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
-        ?? "Server=(localdb)\SQLEXPRESS;Database=ERPLight;Trusted_Connection=True;MultipleActiveResultSets=true";
+        ?? "Server=(localdb)\\SQLEXPRESS;Database=ERPLight;Trusted_Connection=True;MultipleActiveResultSets=true";
     options.UseSqlServer(connectionString);
 });
 

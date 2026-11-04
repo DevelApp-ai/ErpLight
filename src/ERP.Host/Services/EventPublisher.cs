@@ -9,11 +9,13 @@ public class EventPublisher : IEventPublisher
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<EventPublisher> _logger;
+    private readonly ICorrelationIdService _correlationIdService;
 
-    public EventPublisher(IServiceProvider serviceProvider, ILogger<EventPublisher> logger)
+    public EventPublisher(IServiceProvider serviceProvider, ILogger<EventPublisher> logger, ICorrelationIdService correlationIdService)
     {
         _serviceProvider = serviceProvider;
         _logger = logger;
+        _correlationIdService = correlationIdService;
     }
 
     /// <summary>

@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using System.Threading;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -17,6 +18,7 @@ public class TelemetryService
 {
     private readonly IConfiguration _configuration;
     private readonly ILogger<TelemetryService> _logger;
+    private static readonly System.Diagnostics.ActivitySource ActivitySource = new("ErpLight");
     private MeterProvider? _meterProvider;
     private TracerProvider? _tracerProvider;
 
@@ -56,8 +58,6 @@ public class TelemetryService
             .AddAspNetCoreInstrumentation(options =>
             {
                 options.RecordException = true;
-                options.EnrichWithHttpRequest = true;
-                options.EnrichWithHttpResponse = true;
             })
             .AddHttpClientInstrumentation()
             .AddEntityFrameworkCoreInstrumentation();
@@ -73,7 +73,6 @@ public class TelemetryService
             {
                 options.AgentHost = jaegerEndpoint.Split(':')[0];
                 options.AgentPort = int.Parse(jaegerEndpoint.Split(':')[1]);
-                options.ServiceName = "ErpLight";
             });
         }
 
@@ -95,9 +94,6 @@ public class TelemetryService
             .SetResourceBuilder(resourceBuilder)
             .AddAspNetCoreInstrumentation()
             .AddHttpClientInstrumentation()
-            .AddProcessInstrumentation()
-            .AddRuntimeInstrumentation()
-            .AddEventCountersInstrumentation()
             .AddMeter("ErpLight.*");
 
         // Add console exporter for development
@@ -143,7 +139,7 @@ public class TelemetryService
             return null;
         }
 
-        var activity = _tracerProvider.GetTracer("ErpLight").StartActivity(name, activityKind, parentContext);
+        var activity = ActivitySource.StartActivity(name, activityKind, parentContext ?? default);
         return activity;
     }
 
@@ -210,14 +206,14 @@ public class TelemetryService
     /// </summary>
     /// <param name="name">The meter name.</param>
     /// <returns>A meter.</returns>
-    public Meter? GetMeter(string name)
+    public virtual Meter? GetMeter(string name)
     {
         if (_meterProvider == null)
         {
             return null;
         }
 
-        return _meterProvider.GetMeter(name);
+        return new Meter(name);
     }
 
     /// <summary>
@@ -227,7 +223,7 @@ public class TelemetryService
     /// <param name="counterName">The counter name.</param>
     /// <param name="description">The counter description.</param>
     /// <returns>A counter.</returns>
-    public Counter<long>? CreateCounter(string meterName, string counterName, string description)
+    public virtual Counter<long>? CreateCounter(string meterName, string counterName, string description)
     {
         var meter = GetMeter(meterName);
         if (meter == null)
@@ -245,7 +241,7 @@ public class TelemetryService
     /// <param name="histogramName">The histogram name.</param>
     /// <param name="description">The histogram description.</param>
     /// <returns>A histogram.</returns>
-    public Histogram<double>? CreateHistogram(string meterName, string histogramName, string description)
+    public virtual Histogram<double>? CreateHistogram(string meterName, string histogramName, string description)
     {
         var meter = GetMeter(meterName);
         if (meter == null)
@@ -264,7 +260,7 @@ public class TelemetryService
     /// <param name="description">The gauge description.</param>
     /// <param name="observation">The observation function.</param>
     /// <returns>A gauge.</returns>
-    public void CreateGauge<T>(string meterName, string gaugeName, string description, Func<T> observation) where T : struct
+    public virtual void CreateGauge<T>(string meterName, string gaugeName, string description, Func<T> observation) where T : struct
     {
         var meter = GetMeter(meterName);
         if (meter == null)
@@ -272,7 +268,7 @@ public class TelemetryService
             return;
         }
 
-        var gauge = meter.CreateObservableGauge(gaugeName, () => new[] { observation() }, description);
+        var gauge = meter.CreateObservableGauge(gaugeName, observation, description);
     }
 
     /// <summary>

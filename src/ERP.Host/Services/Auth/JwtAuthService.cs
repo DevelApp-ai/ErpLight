@@ -27,27 +27,27 @@ public class JwtAuthService : IAuthService
     /// <summary>
     /// Gets the current user's ID from the JWT token.
     /// </summary>
-    public string? CurrentUserId => GetClaim(ClaimTypes.NameIdentifier);
+    public virtual string? CurrentUserId => GetClaim(ClaimTypes.NameIdentifier);
 
     /// <summary>
     /// Gets the current user's name from the JWT token.
     /// </summary>
-    public string? CurrentUserName => GetClaim(ClaimTypes.Name);
+    public virtual string? CurrentUserName => GetClaim(ClaimTypes.Name);
 
     /// <summary>
     /// Gets the current user's email from the JWT token.
     /// </summary>
-    public string? CurrentUserEmail => GetClaim(ClaimTypes.Email);
+    public virtual string? CurrentUserEmail => GetClaim(ClaimTypes.Email);
 
     /// <summary>
     /// Gets whether the current user is authenticated.
     /// </summary>
-    public bool IsAuthenticated => _httpContextAccessor.HttpContext?.User?.Identity?.IsAuthenticated ?? false;
+    public virtual bool IsAuthenticated => _httpContextAccessor.HttpContext?.User?.Identity?.IsAuthenticated ?? false;
 
     /// <summary>
     /// Gets the current user's roles from the JWT token.
     /// </summary>
-    public IEnumerable<string> CurrentUserRoles => 
+    public virtual IEnumerable<string> CurrentUserRoles => 
         _httpContextAccessor.HttpContext?.User?.Claims
             ?.Where(c => c.Type == ClaimTypes.Role || c.Type == "role")
             ?.Select(c => c.Value)
@@ -58,7 +58,7 @@ public class JwtAuthService : IAuthService
     /// </summary>
     /// <param name="role">The role to check.</param>
     /// <returns>True if the user has the role.</returns>
-    public bool IsInRole(string role)
+    public virtual bool IsInRole(string role)
     {
         return CurrentUserRoles.Contains(role);
     }
@@ -68,7 +68,7 @@ public class JwtAuthService : IAuthService
     /// </summary>
     /// <param name="roles">The roles to check.</param>
     /// <returns>True if the user has any of the roles.</returns>
-    public bool IsInAnyRole(params string[] roles)
+    public virtual bool IsInAnyRole(params string[] roles)
     {
         return roles.Any(IsInRole);
     }
@@ -81,7 +81,7 @@ public class JwtAuthService : IAuthService
     /// <param name="email">The user email.</param>
     /// <param name="roles">The user roles.</param>
     /// <returns>A JWT token string.</returns>
-    public string GenerateToken(string userId, string userName, string email, IEnumerable<string> roles)
+    public virtual string GenerateToken(string userId, string userName, string email, IEnumerable<string> roles)
     {
         var tokenHandler = new JwtSecurityTokenHandler();
         var key = Encoding.ASCII.GetBytes(_jwtSettings.Key);

@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics.Metrics;
 using ERP.Host.Services;
+using ERP.SharedKernel.Contracts;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
 
@@ -142,14 +143,20 @@ public class HealthMetricsService
     {
         var pluginStatus = GetPluginHealthStatus();
 
-        foreach (var (pluginId, status) in pluginStatus)
+        var overall = HealthStatus.Healthy;
+        foreach (var (_, status) in pluginStatus)
         {
-            if (status != HealthStatus.Healthy)
+            if (status == HealthStatus.Unhealthy)
             {
-                return status == HealthStatus.Degraded ? HealthStatus.Degraded : HealthStatus.Unhealthy;
+                return HealthStatus.Unhealthy;
+            }
+
+            if (status == HealthStatus.Degraded)
+            {
+                overall = HealthStatus.Degraded;
             }
         }
 
-        return HealthStatus.Healthy;
+        return overall;
     }
 }
