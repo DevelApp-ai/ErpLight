@@ -38,9 +38,6 @@ public class PluginConfigurationServiceTests : IDisposable
 
     public void Dispose()
     {
-        _configurationMock?.Invoke();
-        _serviceProviderMock?.Invoke();
-        _pluginManagerMock?.Invoke();
     }
 
     [Fact]
@@ -191,22 +188,22 @@ public class PluginConfigurationServiceTests : IDisposable
     [Fact]
     public void GetDatabaseConfiguration_ShouldReturnConfiguredValues()
     {
-        // Arrange
-        var sectionMock = new Mock<IConfigurationSection>();
-        sectionMock.Setup(s => s.Get<PluginDatabaseConfiguration>()).Returns(new PluginDatabaseConfiguration
-        {
-            ConnectionString = "Server=localhost;Database=TestDB",
-            Provider = "SqlServer",
-            EnableMigrations = true,
-            MaxRetryCount = 5,
-            RetryDelayMs = 2000
-        });
-        
-        _configurationMock.Setup(c => c.GetSection("PluginSettings:TestPlugin:Database"))
-            .Returns(sectionMock.Object);
+        // Arrange - use a real in-memory configuration (section.Get<T>() is an
+        // extension method and cannot be intercepted by Moq)
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["PluginSettings:TestPlugin:Database:ConnectionString"] = "Server=localhost;Database=TestDB",
+                ["PluginSettings:TestPlugin:Database:Provider"] = "SqlServer",
+                ["PluginSettings:TestPlugin:Database:EnableMigrations"] = "true",
+                ["PluginSettings:TestPlugin:Database:MaxRetryCount"] = "5",
+                ["PluginSettings:TestPlugin:Database:RetryDelayMs"] = "2000",
+            })
+            .Build();
+        var service = new PluginConfigurationService(configuration, _serviceProviderMock.Object, _logger);
 
         // Act
-        var config = _configurationService.GetDatabaseConfiguration("TestPlugin");
+        var config = service.GetDatabaseConfiguration("TestPlugin");
 
         // Assert
         Assert.NotNull(config);
@@ -216,7 +213,6 @@ public class PluginConfigurationServiceTests : IDisposable
         Assert.Equal(5, config.MaxRetryCount);
         Assert.Equal(2000, config.RetryDelayMs);
     }
-
     [Fact]
     public void GetFeatureConfiguration_ShouldReturnDefault_WhenNotConfigured()
     {
@@ -237,23 +233,23 @@ public class PluginConfigurationServiceTests : IDisposable
     [Fact]
     public void GetFeatureConfiguration_ShouldReturnConfiguredValues()
     {
-        // Arrange
-        var sectionMock = new Mock<IConfigurationSection>();
-        sectionMock.Setup(s => s.Get<PluginFeatureConfiguration>()).Returns(new PluginFeatureConfiguration
-        {
-            Enabled = true,
-            DebugEnabled = true,
-            AuditLoggingEnabled = false,
-            CachingEnabled = false,
-            CacheDurationMinutes = 60,
-            MaxCacheItems = 500
-        });
-        
-        _configurationMock.Setup(c => c.GetSection("PluginSettings:TestPlugin:Features"))
-            .Returns(sectionMock.Object);
+        // Arrange - use a real in-memory configuration (section.Get<T>() is an
+        // extension method and cannot be intercepted by Moq)
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["PluginSettings:TestPlugin:Features:Enabled"] = "true",
+                ["PluginSettings:TestPlugin:Features:DebugEnabled"] = "true",
+                ["PluginSettings:TestPlugin:Features:AuditLoggingEnabled"] = "false",
+                ["PluginSettings:TestPlugin:Features:CachingEnabled"] = "false",
+                ["PluginSettings:TestPlugin:Features:CacheDurationMinutes"] = "60",
+                ["PluginSettings:TestPlugin:Features:MaxCacheItems"] = "500",
+            })
+            .Build();
+        var service = new PluginConfigurationService(configuration, _serviceProviderMock.Object, _logger);
 
         // Act
-        var config = _configurationService.GetFeatureConfiguration("TestPlugin");
+        var config = service.GetFeatureConfiguration("TestPlugin");
 
         // Assert
         Assert.NotNull(config);
@@ -264,7 +260,6 @@ public class PluginConfigurationServiceTests : IDisposable
         Assert.Equal(60, config.CacheDurationMinutes);
         Assert.Equal(500, config.MaxCacheItems);
     }
-
     [Fact]
     public void GetApiConfiguration_ShouldReturnDefault_WhenNotConfigured()
     {
@@ -285,22 +280,22 @@ public class PluginConfigurationServiceTests : IDisposable
     [Fact]
     public void GetApiConfiguration_ShouldReturnConfiguredValues()
     {
-        // Arrange
-        var sectionMock = new Mock<IConfigurationSection>();
-        sectionMock.Setup(s => s.Get<PluginApiConfiguration>()).Returns(new PluginApiConfiguration
-        {
-            ApiPrefix = "api/test",
-            Enabled = true,
-            SwaggerEnabled = true,
-            Version = "v2",
-            RateLimitPerMinute = 200
-        });
-        
-        _configurationMock.Setup(c => c.GetSection("PluginSettings:TestPlugin:Api"))
-            .Returns(sectionMock.Object);
+        // Arrange - use a real in-memory configuration (section.Get<T>() is an
+        // extension method and cannot be intercepted by Moq)
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["PluginSettings:TestPlugin:Api:ApiPrefix"] = "api/test",
+                ["PluginSettings:TestPlugin:Api:Enabled"] = "true",
+                ["PluginSettings:TestPlugin:Api:SwaggerEnabled"] = "true",
+                ["PluginSettings:TestPlugin:Api:Version"] = "v2",
+                ["PluginSettings:TestPlugin:Api:RateLimitPerMinute"] = "200",
+            })
+            .Build();
+        var service = new PluginConfigurationService(configuration, _serviceProviderMock.Object, _logger);
 
         // Act
-        var config = _configurationService.GetApiConfiguration("TestPlugin");
+        var config = service.GetApiConfiguration("TestPlugin");
 
         // Assert
         Assert.NotNull(config);
@@ -310,56 +305,56 @@ public class PluginConfigurationServiceTests : IDisposable
         Assert.Equal("v2", config.Version);
         Assert.Equal(200, config.RateLimitPerMinute);
     }
-
     [Fact]
-    public void GetValue_ShouldReturnDefaultValue_WhenNotConfigured()
+    public void GetValue_ShouldReturnConfiguredValue()
     {
-        // Arrange
-        var sectionMock = new Mock<IConfigurationSection>();
-        sectionMock.Setup(s => s.GetValue<int>(It.IsAny<string>(), It.IsAny<int>()))
-            .Returns(42);
-        
-        _configurationMock.Setup(c => c.GetSection("PluginSettings:TestPlugin"))
-            .Returns(sectionMock.Object);
+        // Arrange - use a real in-memory configuration (section.GetValue<T>() is an
+        // extension method and cannot be intercepted by Moq)
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["PluginSettings:TestPlugin:SomeKey"] = "42",
+            })
+            .Build();
+        var service = new PluginConfigurationService(configuration, _serviceProviderMock.Object, _logger);
 
         // Act
-        var value = _configurationService.GetValue("TestPlugin", "SomeKey", 100);
+        var value = service.GetValue("TestPlugin", "SomeKey", 100);
 
         // Assert
         Assert.Equal(42, value);
     }
-
     [Fact]
     public void GetValue_ShouldReturnDefaultValue_WhenKeyNotFound()
     {
-        // Arrange
-        var sectionMock = new Mock<IConfigurationSection>();
-        sectionMock.Setup(s => s.GetValue<int>(It.IsAny<string>(), It.IsAny<int>()))
-            .Returns(100); // Returns default when not found
-        
-        _configurationMock.Setup(c => c.GetSection("PluginSettings:TestPlugin"))
-            .Returns(sectionMock.Object);
+        // Arrange - use a real in-memory configuration (section.GetValue<T>() is an
+        // extension method and cannot be intercepted by Moq)
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>())
+            .Build();
+        var service = new PluginConfigurationService(configuration, _serviceProviderMock.Object, _logger);
 
         // Act
-        var value = _configurationService.GetValue("TestPlugin", "NonExistentKey", 100);
+        var value = service.GetValue("TestPlugin", "NonExistentKey", 100);
 
         // Assert
         Assert.Equal(100, value);
     }
-
     [Fact]
     public void GetValue_ShouldReturnStringValue()
     {
-        // Arrange
-        var sectionMock = new Mock<IConfigurationSection>();
-        sectionMock.Setup(s => s.GetValue<string>(It.IsAny<string>(), It.IsAny<string>()))
-            .Returns("test-value");
-        
-        _configurationMock.Setup(c => c.GetSection("PluginSettings:TestPlugin"))
-            .Returns(sectionMock.Object);
+        // Arrange - use a real in-memory configuration (section.GetValue<T>() is an
+        // extension method and cannot be intercepted by Moq)
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["PluginSettings:TestPlugin:StringKey"] = "test-value",
+            })
+            .Build();
+        var service = new PluginConfigurationService(configuration, _serviceProviderMock.Object, _logger);
 
         // Act
-        var value = _configurationService.GetValue("TestPlugin", "StringKey", "default");
+        var value = service.GetValue("TestPlugin", "StringKey", "default");
 
         // Assert
         Assert.Equal("test-value", value);
@@ -373,6 +368,11 @@ public class TestPluginConfiguration : PluginConfigurationBase<TestPluginConfigu
 {
     public TestPluginConfiguration(string pluginModuleId, string configurationSection, ILogger logger)
         : base(pluginModuleId, configurationSection, logger)
+    {
+    }
+
+    public TestPluginConfiguration()
+        : base("TestPlugin", "PluginSettings:TestPlugin", Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance)
     {
     }
 

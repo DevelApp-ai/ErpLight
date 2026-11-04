@@ -89,7 +89,7 @@ public class AuthService : IAuthService
     {
         try
         {
-            var result = await _signInManager.PasswordSignInAsync(email, password, rememberMe, shouldLockout: true);
+            var result = await _signInManager.PasswordSignInAsync(email, password, rememberMe, lockoutOnFailure: true);
 
             if (result.Succeeded)
             {

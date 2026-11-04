@@ -3,6 +3,7 @@
 @using ERP.Host.Services.Auth
 @inject AuthService AuthService
 @inject NavigationManager NavigationManager
+@inject IJSRuntime JS
 
 <PageTitle>Register</PageTitle>
 
@@ -109,8 +110,8 @@
             if (result.Success && result.Token != null)
             {
                 // Store token in local storage
-                await localStorage.SetItemAsync("authToken", result.Token);
-                await localStorage.SetItemAsync("authTokenExpires", result.Expires?.ToString("o"));
+                await JS.InvokeVoidAsync("localStorage.setItem", "authToken", result.Token);
+                await JS.InvokeVoidAsync("localStorage.setItem", "authTokenExpires", result.Expires?.ToString("o"));
 
                 successMessage = "Registration successful! Redirecting...";
                 StateHasChanged();

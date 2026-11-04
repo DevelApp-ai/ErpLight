@@ -5,7 +5,9 @@ using System.Threading.Tasks;
 using ERP.SharedKernel.Contracts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using ERP.Host.Data;
 
 namespace ERP.Host.Services;
 
@@ -23,6 +25,41 @@ public class TransactionManager : ITransactionManager
     {
         _serviceProvider = serviceProvider;
         _logger = logger;
+    }
+
+    /// <summary>
+    /// Begins a transaction on every currently registered DbContext (IUnitOfWork contract).
+    /// </summary>
+    public async Task BeginTransactionAsync()
+    {
+        foreach (var dbContext in _serviceProvider.GetServices<DbContext>())
+        {
+            var transaction = await dbContext.Database.BeginTransactionAsync();
+            _activeTransactions.Push(transaction);
+            _logger.LogDebug("Began transaction on {DbContext}", dbContext.GetType().Name);
+        }
+    }
+
+    /// <summary>
+    /// Disposes all active transactions.
+    /// </summary>
+    public void Dispose()
+    {
+        while (_activeTransactions.Count > 0)
+        {
+            _activeTransactions.Pop().Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Disposes all active transactions asynchronously.
+    /// </summary>
+    public async ValueTask DisposeAsync()
+    {
+        while (_activeTransactions.Count > 0)
+        {
+            await _activeTransactions.Pop().DisposeAsync();
+        }
     }
 
     /// <summary>
@@ -73,6 +110,8 @@ public class TransactionManager : ITransactionManager
             catch (Exception ex)
             {
                 exceptions.Add(ex);
+
+                // Roll back the failed transaction.
                 try
                 {
                     await transaction.RollbackAsync();
@@ -82,6 +121,24 @@ public class TransactionManager : ITransactionManager
                     _logger.LogError(rollbackEx, "Error rolling back transaction");
                 }
                 transaction.Dispose();
+
+                // A failed commit invalidates the whole distributed transaction:
+                // roll back and dispose any remaining transactions without committing them.
+                while (_activeTransactions.Count > 0)
+                {
+                    var remaining = _activeTransactions.Pop();
+                    try
+                    {
+                        await remaining.RollbackAsync();
+                    }
+                    catch (Exception rollbackEx)
+                    {
+                        _logger.LogError(rollbackEx, "Error rolling back remaining transaction");
+                    }
+                    remaining.Dispose();
+                }
+
+                break;
             }
         }
 
@@ -240,70 +297,6 @@ public class TransactionManager : ITransactionManager
             throw;
         }
     }
-}
-
-/// <summary>
-/// Interface for managing distributed transactions.
-/// </summary>
-public interface ITransactionManager : IUnitOfWork
-{
-    /// <summary>
-    /// Begins a new distributed transaction.
-    /// </summary>
-    /// <returns>A transaction scope.</returns>
-    ITransactionScope BeginTransaction();
-
-    /// <summary>
-    /// Begins a new transaction on the specified DbContext.
-    /// </summary>
-    /// <typeparam name="TContext">The DbContext type.</typeparam>
-    /// <returns>A task representing the transaction.</returns>
-    Task BeginTransactionAsync<TContext>() where TContext : DbContext;
-
-    /// <summary>
-    /// Executes a compensating action if the main action fails.
-    /// </summary>
-    /// <param name="action">The main action to execute.</param>
-    /// <param name="compensatingAction">The compensating action to execute on failure.</param>
-    /// <param name="cancellationToken">A cancellation token.</param>
-    /// <returns>A task representing the execution.</returns>
-    Task ExecuteWithCompensationAsync(
-        Func<Task> action,
-        Func<Task> compensatingAction,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Executes multiple actions in a transactional manner.
-    /// </summary>
-    /// <param name="actions">The actions to execute with their compensating actions.</param>
-    /// <param name="cancellationToken">A cancellation token.</param>
-    /// <returns>A task representing the execution.</returns>
-    Task ExecuteTransactionalWorkflowAsync(
-        IEnumerable<(Func<Task> action, Func<Task> compensate)> actions,
-        CancellationToken cancellationToken = default);
-}
-
-/// <summary>
-/// Represents a transaction scope for managing the lifetime of a transaction.
-/// </summary>
-public interface ITransactionScope : IDisposable, IAsyncDisposable
-{
-    /// <summary>
-    /// Gets the transaction manager.
-    /// </summary>
-    ITransactionManager TransactionManager { get; }
-
-    /// <summary>
-    /// Commits the transaction.
-    /// </summary>
-    /// <returns>A task representing the commit operation.</returns>
-    Task CommitAsync();
-
-    /// <summary>
-    /// Rolls back the transaction.
-    /// </summary>
-    /// <returns>A task representing the rollback operation.</returns>
-    Task RollbackAsync();
 }
 
 /// <summary>

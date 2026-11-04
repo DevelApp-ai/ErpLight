@@ -20,10 +20,10 @@ jobs:
         
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       
     - name: Setup .NET
-      uses: actions/setup-dotnet@v4
+      uses: actions/setup-dotnet@v5
       with:
         dotnet-version: ${{ env.DOTNET_VERSION }}
         
@@ -38,7 +38,7 @@ jobs:
       
     - name: Upload coverage reports
       if: matrix.os == 'ubuntu-latest'
-      uses: codecov/codecov-action@v3
+      uses: codecov/codecov-action@v7
       with:
         files: '**/coverage.cobertura.xml'
         fail_ci_if_error: false
@@ -81,10 +81,10 @@ jobs:
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       
     - name: Setup .NET
-      uses: actions/setup-dotnet@v4
+      uses: actions/setup-dotnet@v5
       with:
         dotnet-version: ${{ env.DOTNET_VERSION }}
         
@@ -97,7 +97,7 @@ jobs:
         dotnet pack src/plugins/Orders/ERP.Plugin.Orders/ERP.Plugin.Orders.csproj --configuration Release --output ./packages
         
     - name: Upload NuGet packages
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: nuget-packages-${{ github.run_number }}
         path: ./packages/*.nupkg

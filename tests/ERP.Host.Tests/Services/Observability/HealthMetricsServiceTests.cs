@@ -1,4 +1,6 @@
 using ERP.Host.Services;
+using System.Diagnostics.Metrics;
+using ERP.SharedKernel.Contracts;
 using ERP.Host.Services.Observability;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
@@ -16,7 +18,7 @@ public class HealthMetricsServiceTests : IDisposable
     private readonly Mock<TelemetryService> _telemetryServiceMock;
     private readonly Mock<PluginManager> _pluginManagerMock;
     private readonly ILogger<HealthMetricsService> _logger;
-    private readonly HealthMetricsService _healthMetricsService;
+    private HealthMetricsService _healthMetricsService;
 
     public HealthMetricsServiceTests()
     {
@@ -37,12 +39,41 @@ public class HealthMetricsServiceTests : IDisposable
             _logger);
     }
 
-    public void Dispose()
+    private sealed class MetricsCapture : IDisposable
     {
-        _telemetryServiceMock?.Invoke();
-        _pluginManagerMock?.Invoke();
+        private readonly MeterListener _listener = new();
+        public System.Collections.Concurrent.ConcurrentQueue<(string Instrument, object Value)> Measurements { get; } = new();
+
+        public MetricsCapture()
+        {
+            _listener.InstrumentPublished = (instrument, listener) =>
+            {
+                if (instrument.Meter.Name == "ErpLight.Health")
+                {
+                    listener.EnableMeasurementEvents(instrument);
+                }
+            };
+            _listener.SetMeasurementEventCallback<long>((instrument, value, _, _) => Measurements.Enqueue((instrument.Name, value)));
+            _listener.SetMeasurementEventCallback<double>((instrument, value, _, _) => Measurements.Enqueue((instrument.Name, value)));
+            _listener.Start();
+        }
+
+        public void Dispose() => _listener.Dispose();
     }
 
+    private HealthMetricsService CreateServiceWithRealMeter()
+    {
+        var meter = new Meter("ErpLight.Health");
+        _telemetryServiceMock.Setup(t => t.GetMeter(It.IsAny<string>())).Returns(meter);
+        return new HealthMetricsService(
+            _telemetryServiceMock.Object,
+            _pluginManagerMock.Object,
+            _logger);
+    }
+
+    public void Dispose()
+    {
+    }
     [Fact]
     public void RecordHealthCheck_ShouldNotThrow_WhenCountersAreNull()
     {
@@ -59,92 +90,47 @@ public class HealthMetricsServiceTests : IDisposable
     public void RecordHealthCheck_ShouldIncrementCounters_WhenInitialized()
     {
         // Arrange
-        var meterMock = new Mock<Meter>();
-        var counterMock = new Mock<Counter<long>>();
-        var histogramMock = new Mock<Histogram<double>>();
-        
-        _telemetryServiceMock.Setup(t => t.GetMeter("ErpLight.Health")).Returns(meterMock.Object);
-        _telemetryServiceMock.Setup(t => t.CreateCounter("ErpLight.Health", "health.checks.total", It.IsAny<string>()))
-            .Returns(counterMock.Object);
-        _telemetryServiceMock.Setup(t => t.CreateHistogram("ErpLight.Health", "health.check.duration.ms", It.IsAny<string>()))
-            .Returns(histogramMock.Object);
-
-        // Re-initialize the service to pick up the mocks
-        _healthMetricsService = new HealthMetricsService(
-            _telemetryServiceMock.Object,
-            _pluginManagerMock.Object,
-            _logger);
+        using var capture = new MetricsCapture();
+        _healthMetricsService = CreateServiceWithRealMeter();
 
         // Act
         _healthMetricsService.RecordHealthCheck("TestHealthCheck", HealthStatus.Healthy, 100);
 
         // Assert
-        counterMock.Verify(c => c.Add(1), Times.Once);
-        histogramMock.Verify(h => h.Record(100), Times.Once);
+        Assert.Contains(capture.Measurements, m => m.Instrument == "health.checks.total" && Equals(m.Value, 1L));
+        Assert.Contains(capture.Measurements, m => m.Instrument == "health.check.duration.ms" && Equals(m.Value, 100.0));
+        Assert.DoesNotContain(capture.Measurements, m => m.Instrument == "health.checks.failed");
     }
-
     [Fact]
     public void RecordHealthCheck_ShouldIncrementFailureCounter_WhenUnhealthy()
     {
         // Arrange
-        var meterMock = new Mock<Meter>();
-        var healthCheckCounterMock = new Mock<Counter<long>>();
-        var healthCheckFailureCounterMock = new Mock<Counter<long>>();
-        var histogramMock = new Mock<Histogram<double>>();
-        
-        _telemetryServiceMock.Setup(t => t.GetMeter("ErpLight.Health")).Returns(meterMock.Object);
-        _telemetryServiceMock.Setup(t => t.CreateCounter("ErpLight.Health", "health.checks.total", It.IsAny<string>()))
-            .Returns(healthCheckCounterMock.Object);
-        _telemetryServiceMock.Setup(t => t.CreateCounter("ErpLight.Health", "health.checks.failed", It.IsAny<string>()))
-            .Returns(healthCheckFailureCounterMock.Object);
-        _telemetryServiceMock.Setup(t => t.CreateHistogram("ErpLight.Health", "health.check.duration.ms", It.IsAny<string>()))
-            .Returns(histogramMock.Object);
-
-        _healthMetricsService = new HealthMetricsService(
-            _telemetryServiceMock.Object,
-            _pluginManagerMock.Object,
-            _logger);
+        using var capture = new MetricsCapture();
+        _healthMetricsService = CreateServiceWithRealMeter();
 
         // Act
         _healthMetricsService.RecordHealthCheck("TestHealthCheck", HealthStatus.Unhealthy, 200);
 
         // Assert
-        healthCheckCounterMock.Verify(c => c.Add(1), Times.Once);
-        healthCheckFailureCounterMock.Verify(c => c.Add(1), Times.Once);
-        histogramMock.Verify(h => h.Record(200), Times.Once);
+        Assert.Contains(capture.Measurements, m => m.Instrument == "health.checks.total" && Equals(m.Value, 1L));
+        Assert.Contains(capture.Measurements, m => m.Instrument == "health.checks.failed" && Equals(m.Value, 1L));
+        Assert.Contains(capture.Measurements, m => m.Instrument == "health.check.duration.ms" && Equals(m.Value, 200.0));
     }
-
     [Fact]
     public void RecordHealthCheck_ShouldIncrementFailureCounter_WhenDegraded()
     {
         // Arrange
-        var meterMock = new Mock<Meter>();
-        var healthCheckCounterMock = new Mock<Counter<long>>();
-        var healthCheckFailureCounterMock = new Mock<Counter<long>>();
-        var histogramMock = new Mock<Histogram<double>>();
-        
-        _telemetryServiceMock.Setup(t => t.GetMeter("ErpLight.Health")).Returns(meterMock.Object);
-        _telemetryServiceMock.Setup(t => t.CreateCounter("ErpLight.Health", "health.checks.total", It.IsAny<string>()))
-            .Returns(healthCheckCounterMock.Object);
-        _telemetryServiceMock.Setup(t => t.CreateCounter("ErpLight.Health", "health.checks.failed", It.IsAny<string>()))
-            .Returns(healthCheckFailureCounterMock.Object);
-        _telemetryServiceMock.Setup(t => t.CreateHistogram("ErpLight.Health", "health.check.duration.ms", It.IsAny<string>()))
-            .Returns(histogramMock.Object);
-
-        _healthMetricsService = new HealthMetricsService(
-            _telemetryServiceMock.Object,
-            _pluginManagerMock.Object,
-            _logger);
+        using var capture = new MetricsCapture();
+        _healthMetricsService = CreateServiceWithRealMeter();
 
         // Act
         _healthMetricsService.RecordHealthCheck("TestHealthCheck", HealthStatus.Degraded, 150);
 
         // Assert
-        healthCheckCounterMock.Verify(c => c.Add(1), Times.Once);
-        healthCheckFailureCounterMock.Verify(c => c.Add(1), Times.Once);
-        histogramMock.Verify(h => h.Record(150), Times.Once);
+        Assert.Contains(capture.Measurements, m => m.Instrument == "health.checks.total" && Equals(m.Value, 1L));
+        Assert.Contains(capture.Measurements, m => m.Instrument == "health.checks.failed" && Equals(m.Value, 1L));
+        Assert.Contains(capture.Measurements, m => m.Instrument == "health.check.duration.ms" && Equals(m.Value, 150.0));
     }
-
     [Fact]
     public void RecordPluginHealthCheck_ShouldNotThrow_WhenCountersAreNull()
     {
@@ -161,56 +147,30 @@ public class HealthMetricsServiceTests : IDisposable
     public void RecordPluginHealthCheck_ShouldIncrementCounters_WhenInitialized()
     {
         // Arrange
-        var meterMock = new Mock<Meter>();
-        var pluginHealthCounterMock = new Mock<Counter<long>>();
-        var pluginHealthFailureCounterMock = new Mock<Counter<long>>();
-        
-        _telemetryServiceMock.Setup(t => t.GetMeter("ErpLight.Health")).Returns(meterMock.Object);
-        _telemetryServiceMock.Setup(t => t.CreateCounter("ErpLight.Health", "plugin.health.checks.total", It.IsAny<string>()))
-            .Returns(pluginHealthCounterMock.Object);
-        _telemetryServiceMock.Setup(t => t.CreateCounter("ErpLight.Health", "plugin.health.checks.failed", It.IsAny<string>()))
-            .Returns(pluginHealthFailureCounterMock.Object);
-
-        _healthMetricsService = new HealthMetricsService(
-            _telemetryServiceMock.Object,
-            _pluginManagerMock.Object,
-            _logger);
+        using var capture = new MetricsCapture();
+        _healthMetricsService = CreateServiceWithRealMeter();
 
         // Act
         _healthMetricsService.RecordPluginHealthCheck("TestPlugin", HealthStatus.Healthy);
 
         // Assert
-        pluginHealthCounterMock.Verify(c => c.Add(1), Times.Once);
-        pluginHealthFailureCounterMock.Verify(c => c.Add(1), Times.Never);
+        Assert.Contains(capture.Measurements, m => m.Instrument == "plugin.health.checks.total" && Equals(m.Value, 1L));
+        Assert.DoesNotContain(capture.Measurements, m => m.Instrument == "plugin.health.checks.failed");
     }
-
     [Fact]
     public void RecordPluginHealthCheck_ShouldIncrementFailureCounter_WhenUnhealthy()
     {
         // Arrange
-        var meterMock = new Mock<Meter>();
-        var pluginHealthCounterMock = new Mock<Counter<long>>();
-        var pluginHealthFailureCounterMock = new Mock<Counter<long>>();
-        
-        _telemetryServiceMock.Setup(t => t.GetMeter("ErpLight.Health")).Returns(meterMock.Object);
-        _telemetryServiceMock.Setup(t => t.CreateCounter("ErpLight.Health", "plugin.health.checks.total", It.IsAny<string>()))
-            .Returns(pluginHealthCounterMock.Object);
-        _telemetryServiceMock.Setup(t => t.CreateCounter("ErpLight.Health", "plugin.health.checks.failed", It.IsAny<string>()))
-            .Returns(pluginHealthFailureCounterMock.Object);
-
-        _healthMetricsService = new HealthMetricsService(
-            _telemetryServiceMock.Object,
-            _pluginManagerMock.Object,
-            _logger);
+        using var capture = new MetricsCapture();
+        _healthMetricsService = CreateServiceWithRealMeter();
 
         // Act
         _healthMetricsService.RecordPluginHealthCheck("TestPlugin", HealthStatus.Unhealthy);
 
         // Assert
-        pluginHealthCounterMock.Verify(c => c.Add(1), Times.Once);
-        pluginHealthFailureCounterMock.Verify(c => c.Add(1), Times.Once);
+        Assert.Contains(capture.Measurements, m => m.Instrument == "plugin.health.checks.total" && Equals(m.Value, 1L));
+        Assert.Contains(capture.Measurements, m => m.Instrument == "plugin.health.checks.failed" && Equals(m.Value, 1L));
     }
-
     [Fact]
     public void GetPluginHealthStatus_ShouldReturnEmpty_WhenNoPlugins()
     {

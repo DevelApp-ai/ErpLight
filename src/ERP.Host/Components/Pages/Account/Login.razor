@@ -3,6 +3,7 @@
 @using ERP.Host.Services.Auth
 @inject AuthService AuthService
 @inject NavigationManager NavigationManager
+@inject IJSRuntime JS
 
 <PageTitle>Login</PageTitle>
 
@@ -79,8 +80,8 @@
             if (result.Success && result.Token != null)
             {
                 // Store token in local storage (handled by auth middleware)
-                await localStorage.SetItemAsync("authToken", result.Token);
-                await localStorage.SetItemAsync("authTokenExpires", result.Expires?.ToString("o"));
+                await JS.InvokeVoidAsync("localStorage.setItem", "authToken", result.Token);
+                await JS.InvokeVoidAsync("localStorage.setItem", "authTokenExpires", result.Expires?.ToString("o"));
 
                 // Redirect to home
                 NavigationManager.NavigateTo("/", true);

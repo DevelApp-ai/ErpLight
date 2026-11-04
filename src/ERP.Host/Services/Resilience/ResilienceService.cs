@@ -1,9 +1,12 @@
 using System;
+using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Polly;
+using Polly.CircuitBreaker;
 using Polly.Retry;
+using Polly.Timeout;
 
 namespace ERP.Host.Services.Resilience;
 
@@ -13,6 +16,7 @@ namespace ERP.Host.Services.Resilience;
 public class ResilienceService
 {
     private readonly ILogger<ResilienceService> _logger;
+    private readonly ConcurrentDictionary<(int Threshold, int BreakDurationMs), AsyncCircuitBreakerPolicy> _circuitBreakerCache = new();
 
     public ResilienceService(ILogger<ResilienceService> logger)
     {
@@ -94,9 +98,10 @@ public class ResilienceService
     /// <returns>An async timeout policy.</returns>
     public AsyncTimeoutPolicy CreateTimeoutPolicy(int timeoutMs = 5000)
     {
-        return Policy.TimeoutAsync(TimeSpan.FromMilliseconds(timeoutMs), onTimeout: (context, timespan, task) =>
+        return Policy.TimeoutAsync(TimeSpan.FromMilliseconds(timeoutMs), TimeoutStrategy.Pessimistic, (context, timespan, task) =>
         {
             _logger.LogWarning("Operation timed out after {TimeoutMs}ms", timespan.TotalMilliseconds);
+            return Task.CompletedTask;
         });
     }
 
@@ -126,7 +131,7 @@ public class ResilienceService
         var retryPolicy = CreateRetryPolicy(retryCount);
         var timeoutPolicy = CreateTimeoutPolicy(timeoutMs);
         
-        return Policy.WrapAsync(retryPolicy, timeoutPolicy);
+        return Policy.WrapAsync(timeoutPolicy, retryPolicy);
     }
 
     /// <summary>
@@ -145,7 +150,7 @@ public class ResilienceService
         CancellationToken cancellationToken = default)
     {
         var policy = CreateRetryPolicy(retryCount, delayMs);
-        return await policy.ExecuteAsync(action, cancellationToken);
+        return await policy.ExecuteAsync(async ct => await action(), cancellationToken);
     }
 
     /// <summary>
@@ -163,8 +168,10 @@ public class ResilienceService
         int breakDurationMs = 30000,
         CancellationToken cancellationToken = default)
     {
-        var policy = CreateCircuitBreakerPolicy(exceptionsAllowedBeforeBreaking, breakDurationMs);
-        return await policy.ExecuteAsync(action, cancellationToken);
+        var policy = _circuitBreakerCache.GetOrAdd(
+            (exceptionsAllowedBeforeBreaking, breakDurationMs),
+            _ => CreateCircuitBreakerPolicy(exceptionsAllowedBeforeBreaking, breakDurationMs));
+        return await policy.ExecuteAsync(async ct => await action(), cancellationToken);
     }
 
     /// <summary>
@@ -181,7 +188,7 @@ public class ResilienceService
         CancellationToken cancellationToken = default)
     {
         var policy = CreateTimeoutPolicy(timeoutMs);
-        return await policy.ExecuteAsync(action, cancellationToken);
+        return await policy.ExecuteAsync(async ct => await action(), cancellationToken);
     }
 
     /// <summary>
@@ -202,7 +209,7 @@ public class ResilienceService
         CancellationToken cancellationToken = default)
     {
         var policy = CreateResilientPolicy(retryCount, exceptionsAllowedBeforeBreaking, breakDurationMs);
-        return await policy.ExecuteAsync(action, cancellationToken);
+        return await policy.ExecuteAsync(async ct => await action(), cancellationToken);
     }
 
     /// <summary>
@@ -221,7 +228,7 @@ public class ResilienceService
         CancellationToken cancellationToken = default)
     {
         var policy = CreateRetryWithTimeoutPolicy(retryCount, timeoutMs);
-        return await policy.ExecuteAsync(action, cancellationToken);
+        return await policy.ExecuteAsync(async ct => await action(), cancellationToken);
     }
 
     /// <summary>
@@ -239,11 +246,15 @@ public class ResilienceService
         int retryCount = 3,
         CancellationToken cancellationToken = default)
     {
-        var policy = Policy<TResult>
+        var retryPolicy = Policy<TResult>
+            .Handle<Exception>()
+            .RetryAsync(retryCount);
+
+        var fallbackPolicy = Policy<TResult>
             .Handle<Exception>()
             .OrResult(default(TResult)!)
             .FallbackAsync(fallbackValue);
 
-        return await policy.ExecuteAsync(action, cancellationToken);
+        return await fallbackPolicy.WrapAsync(retryPolicy).ExecuteAsync(async ct => await action(), cancellationToken);
     }
 }

@@ -3,6 +3,7 @@
 @using ERP.Host.Services.Auth
 @inject AuthService AuthService
 @inject NavigationManager NavigationManager
+@inject IJSRuntime JS
 
 <PageTitle>Profile</PageTitle>
 
@@ -74,7 +75,7 @@ else
 
                         <div class="d-grid gap-2">
                             <button class="btn btn-outline-primary" @onclick="Logout">Logout</button>
-                            <button class="btn btn-outline-secondary" @onclick="() => NavigationManager.NavigateTo("/")">Back to Home</button>
+                            <button class="btn btn-outline-secondary" @onclick='() => NavigationManager.NavigateTo("/")'>Back to Home</button>
                         </div>
                     }
                     else
@@ -103,8 +104,8 @@ else
     private async Task Logout()
     {
         await AuthService.LogoutAsync();
-        await localStorage.RemoveItemAsync("authToken");
-        await localStorage.RemoveItemAsync("authTokenExpires");
+        await JS.InvokeVoidAsync("localStorage.removeItem", "authToken");
+        await JS.InvokeVoidAsync("localStorage.removeItem", "authTokenExpires");
         NavigationManager.NavigateTo("/", true);
     }
 }

@@ -37,7 +37,7 @@ public class PluginConfigurationService
     {
         if (_pluginConfigurations.TryGetValue(pluginModuleId, out var config))
         {
-            return (TConfiguration?)config;
+            return config as TConfiguration;
         }
 
         return default;

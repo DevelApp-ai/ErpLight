@@ -3,6 +3,9 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Polly;
+using Polly.CircuitBreaker;
+using Polly.Retry;
+using Polly.Timeout;
 using Xunit;
 
 namespace ERP.Host.Tests.Services;
@@ -105,13 +108,14 @@ public class ResilienceServiceTests : IDisposable
         // Assert
         Assert.Equal(3, attemptTimes.Count);
         
-        // Check that delays are increasing (approximately exponential)
+        // Check that delays increase between retries (100ms then 200ms on this
+        // policy). Use generous upper bounds so slow, contended CI runners
+        // (e.g. macOS) do not flake on precise wall-clock windows.
         var delay1 = (attemptTimes[1] - attemptTimes[0]).TotalMilliseconds;
         var delay2 = (attemptTimes[2] - attemptTimes[1]).TotalMilliseconds;
         
-        // First retry: ~100ms, Second retry: ~200ms (exponential)
-        Assert.InRange(delay1, 90, 150); // Allow some tolerance
-        Assert.InRange(delay2, 180, 250); // Allow some tolerance
+        Assert.InRange(delay1, 90, 1000);
+        Assert.InRange(delay2, delay1 + 50, 5000);
     }
 
     [Fact]
@@ -203,7 +207,7 @@ public class ResilienceServiceTests : IDisposable
 
         // Assert
         Assert.NotNull(policy);
-        Assert.IsType<AsyncPolicy>(policy);
+        Assert.IsAssignableFrom<AsyncPolicy>(policy);
     }
 
     [Fact]
@@ -214,7 +218,7 @@ public class ResilienceServiceTests : IDisposable
 
         // Assert
         Assert.NotNull(policy);
-        Assert.IsType<AsyncPolicy>(policy);
+        Assert.IsAssignableFrom<AsyncPolicy>(policy);
     }
 
     [Fact]
@@ -259,7 +263,7 @@ public class ResilienceServiceTests : IDisposable
         var attemptCount = 0;
 
         // Act & Assert
-        await Assert.ThrowsAsync<Exception>(() => _resilienceService.ExecuteWithRetryAsync(async () =>
+        await Assert.ThrowsAsync<Exception>(() => _resilienceService.ExecuteWithRetryAsync<object>(async () =>
         {
             attemptCount++;
             throw new Exception("Test exception");
@@ -290,22 +294,23 @@ public class ResilienceServiceTests : IDisposable
         // Act - Execute until circuit breaks
         for (int i = 0; i < 5; i++)
         {
-            await Assert.ThrowsAnyAsync<Exception>(() => _resilienceService.ExecuteWithCircuitBreakerAsync(async () =>
+            await Assert.ThrowsAnyAsync<Exception>(() => _resilienceService.ExecuteWithCircuitBreakerAsync<object>(async () =>
             {
                 attemptCount++;
                 throw new Exception("Test exception");
             }, exceptionsAllowedBeforeBreaking: 3, breakDurationMs: 1000));
         }
 
-        // After 5 attempts, circuit should be broken
+        // After the allowed failures, circuit should be broken
         await Assert.ThrowsAsync<BrokenCircuitException>(() => _resilienceService.ExecuteWithCircuitBreakerAsync(async () =>
         {
             attemptCount++;
             return "Should not reach here";
         }, exceptionsAllowedBeforeBreaking: 3, breakDurationMs: 1000));
 
-        // attemptCount should be 5
-        Assert.Equal(5, attemptCount);
+        // attemptCount should be 3: calls 4, 5 and the last call failed fast with
+        // BrokenCircuitException without executing the action
+        Assert.Equal(3, attemptCount);
     }
 
     [Fact]

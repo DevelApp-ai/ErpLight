@@ -50,9 +50,6 @@ public class AuthServiceTests : IDisposable
 
     public void Dispose()
     {
-        _userManagerMock?.Invoke();
-        _signInManagerMock?.Invoke();
-        _jwtAuthServiceMock?.Invoke();
     }
 
     [Fact]
@@ -140,7 +137,7 @@ public class AuthServiceTests : IDisposable
         var claimsPrincipal = new System.Security.Claims.ClaimsPrincipal(new System.Security.Claims.ClaimsIdentity(new[]
         {
             new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Name, "testuser")
-        }, "TestAuth") { IsAuthenticated = true });
+        }, "TestAuth"));
         httpContext.User = claimsPrincipal;
         
         _httpContextAccessorMock.Setup(x => x.HttpContext).Returns(httpContext);
@@ -322,15 +319,16 @@ public class AuthServiceTests : IDisposable
         var token = "new-token";
 
         _userManagerMock.Setup(x => x.CreateAsync(It.IsAny<IdentityUser>(), request.Password))
+            .Callback<IdentityUser, string>((createdUser, _) => createdUser.Id = user.Id)
             .ReturnsAsync(IdentityResult.Success);
         
-        _userManagerMock.Setup(x => x.AddToRoleAsync(user, "User"))
+        _userManagerMock.Setup(x => x.AddToRoleAsync(It.IsAny<IdentityUser>(), "User"))
             .ReturnsAsync(IdentityResult.Success);
         
-        _userManagerMock.Setup(x => x.GetRolesAsync(user))
+        _userManagerMock.Setup(x => x.GetRolesAsync(It.IsAny<IdentityUser>()))
             .ReturnsAsync(new[] { "User" });
         
-        _jwtAuthServiceMock.Setup(x => x.GenerateToken(user.Id, user.UserName, request.Email, new[] { "User" }))
+        _jwtAuthServiceMock.Setup(x => x.GenerateToken(user.Id, user.UserName, request.Email, It.IsAny<IEnumerable<string>>()))
             .Returns(token);
 
         // Act
@@ -455,15 +453,16 @@ public class AuthServiceTests : IDisposable
         var roles = new[] { role };
 
         _userManagerMock.Setup(x => x.CreateAsync(It.IsAny<IdentityUser>(), password))
+            .Callback<IdentityUser, string>((createdUser, _) => createdUser.Id = user.Id)
             .ReturnsAsync(IdentityResult.Success);
         
-        _userManagerMock.Setup(x => x.AddToRoleAsync(user, role))
+        _userManagerMock.Setup(x => x.AddToRoleAsync(It.IsAny<IdentityUser>(), role))
             .ReturnsAsync(IdentityResult.Success);
         
-        _userManagerMock.Setup(x => x.GetRolesAsync(user))
+        _userManagerMock.Setup(x => x.GetRolesAsync(It.IsAny<IdentityUser>()))
             .ReturnsAsync(roles);
         
-        _jwtAuthServiceMock.Setup(x => x.GenerateToken(user.Id, user.UserName, email, roles))
+        _jwtAuthServiceMock.Setup(x => x.GenerateToken(user.Id, user.UserName, email, It.IsAny<IEnumerable<string>>()))
             .Returns(token);
 
         // Act

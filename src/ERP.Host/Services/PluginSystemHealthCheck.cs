@@ -46,6 +46,7 @@ public class PluginSystemHealthCheck : IHealthCheck
         {
             return HealthCheckResult.Degraded(
                 $"Plugin system is degraded. {unhealthyPlugins} plugin(s) unhealthy.",
+                null,
                 data);
         }
 
