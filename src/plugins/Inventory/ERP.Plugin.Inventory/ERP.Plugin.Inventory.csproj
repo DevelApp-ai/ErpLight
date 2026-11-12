@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     
     <!-- NuGet Package Configuration -->
-    <PackageId>ERP.Plugin.Inventory</PackageId>
+    <PackageId>DevelApp.ErpLight.Plugin.Inventory</PackageId>
     <Version>1.0.0</Version>
     <Authors>DevelApp.ai</Authors>
     <Company>DevelApp.ai</Company>
