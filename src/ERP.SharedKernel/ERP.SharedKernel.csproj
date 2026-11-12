@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     
     <!-- NuGet Package Configuration -->
-    <PackageId>ERP.SharedKernel</PackageId>
+    <PackageId>DevelApp.ErpLight.SharedKernel</PackageId>
     <Version>1.0.0</Version>
     <Authors>DevelApp.ai</Authors>
     <Company>DevelApp.ai</Company>
